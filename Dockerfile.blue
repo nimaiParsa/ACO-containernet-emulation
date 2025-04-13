@@ -1,0 +1,24 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install tools for network monitoring and SSH (if needed for remote inspection)
+RUN apt-get update && apt-get install -y \
+    iputils-ping \
+    net-tools \
+    tcpdump \
+    tshark \
+    nmap \
+    iproute2 \
+    openssh-server \
+    && apt-get clean
+
+# Enable SSH
+RUN mkdir /var/run/sshd && \
+    echo 'root:defender' | chpasswd && \
+    sed -i 's/#\?PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#\?PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+EXPOSE 22
+
+CMD ["sh", "-c", "service ssh start && tail -f /dev/null"]
