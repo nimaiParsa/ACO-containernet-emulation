@@ -7,6 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     openssh-server \
     iputils-ping \
+    traceroute \
     net-tools \
     iproute2 \
     curl \
