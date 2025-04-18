@@ -7,4 +7,4 @@ service ssh start
 python3 -m http.server 8080 --directory / &
 
 # Prevent container from exiting by keeping a foreground process
-tail -f /dev/null
+# tail -f /dev/null

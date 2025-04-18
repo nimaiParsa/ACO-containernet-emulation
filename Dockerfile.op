@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     net-tools \
     nmap \
     openssh-server \
+    sudo \
     && apt-get clean
 
 # Create a user with weak password
@@ -29,8 +30,9 @@ RUN mkdir /var/run/sshd && \
     sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
     echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
 
-EXPOSE 22 8080
-
 COPY op_scripts/start_services.sh /home/start_services.sh
 RUN chmod +x /home/start_services.sh
+
+EXPOSE 22 8080
+
 CMD ["/home/start_services.sh"]
