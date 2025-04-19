@@ -21,6 +21,7 @@ RUN useradd -ms /bin/bash hacker && \
 
 # Copy scripts to the user's home directory
 COPY red_scripts /home/hacker/red_scripts
+COPY blue_scripts /home/hacker/blue_scripts
 RUN chown -R hacker:hacker /home/hacker/red_scripts && \
     chmod +x /home/hacker/red_scripts/*.sh
 
