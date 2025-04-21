@@ -19,6 +19,10 @@ RUN useradd -ms /bin/bash hacker && \
     echo "hacker:1234" | chpasswd && \
     adduser hacker sudo
 
+# Enable root SSH login with password
+RUN echo "root:root" | chpasswd && passwd -u root && \
+    echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+
 # Copy scripts to the user's home directory
 COPY red_scripts /home/hacker/red_scripts
 COPY blue_scripts /home/hacker/blue_scripts

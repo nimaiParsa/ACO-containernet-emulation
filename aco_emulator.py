@@ -74,7 +74,7 @@ class ACOEmulator:
         user2.cmd('service ssh start')
 
         print("[+] Storing op server info on user2")
-        user2.cmd('mkdir -p /home/hacker && echo "op_server=10.0.1.2" > /home/hacker/secret.txt')
+        user2.cmd('mkdir -p /home/hacker && echo "op=10.0.1.2" > /home/hacker/secret.txt')
 
         if interactive:
             print("[+] Starting interactive mode")

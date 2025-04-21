@@ -1,7 +1,11 @@
-import re
+import shlex
 
-a = re.match(r'^(\d+)/(tcp|udp)\s+open\s+(\S+)?', '22/tcp open ssh   fdsjljfdsljfkldas')
+cmd =  "Hello, World"
 
-print(a.group(1))  # 22
-print(a.group(2))  # tcp
-print(a.group(3))  # ssh
+cmd = shlex.quote(cmd)
+
+cmd = f"python3 -c {cmd}"
+
+
+
+print(cmd)

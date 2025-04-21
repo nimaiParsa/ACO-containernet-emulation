@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     nmap \
     vim \
     python3 \
+    binutils \
     sudo \
     && rm -rf /var/lib/apt/lists/*
 
@@ -24,6 +25,10 @@ RUN apt-get update && apt-get install -y \
 RUN useradd -ms /bin/bash hacker && \
     echo "hacker:1234" | chpasswd && \
     adduser hacker sudo
+
+# Enable root SSH login with password
+RUN echo "root:root" | chpasswd && passwd -u root && \
+    echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
 
 # Configure SSH to allow password authentication
 RUN mkdir /var/run/sshd && \
