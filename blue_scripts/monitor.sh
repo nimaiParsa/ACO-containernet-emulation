@@ -4,10 +4,10 @@
 # Collects information about flagged malicious activity on all hosts
 
 # Hard-coded list of IP addresses to monitor
-HOSTS=("192.168.1.10" "192.168.1.20" "192.168.1.30")
+HOSTS=("10.0.0.1", "10.0.0.2", "10.0.0.3")
 
 # Log file for flagged malicious activity
-LOG_FILE="/var/log/blue_agent_monitor.log"
+LOG_FILE="/home/hacker/blue_scripts/blue_agent_monitor.log"
 
 # Function to calculate file entropy (density)
 calculate_density() {

@@ -32,7 +32,9 @@ RUN mkdir /var/run/sshd && \
     echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
 
 COPY red_scripts /home/hacker/red_scripts
+COPY blue_scripts /home/hacker/blue_scripts
 RUN chown -R hacker:hacker /home/hacker/red_scripts && chmod +x /home/hacker/red_scripts/*.sh
+RUN chown -R hacker:hacker /home/hacker/blue_scripts && chmod +x /home/hacker/blue_scripts/*.sh
     
 # Expose SSH
 EXPOSE 22
