@@ -10,9 +10,9 @@ if [ -z "$TARGET_IP" ]; then
     exit 1
 fi
 
-echo "[*] Running Nmap service discovery on $TARGET_IP..."
 
 # Run a TCP SYN scan on common ports with service version detection
-nmap -sS -sV -T4 --open "$TARGET_IP"
+nmap -p 22,80,443,8080 -sS -sV -T4 --open "$TARGET_IP"
 
+echo "[*] Running Nmap service discovery on $TARGET_IP..."
 echo "[*] Service discovery completed."
