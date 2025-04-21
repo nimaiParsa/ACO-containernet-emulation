@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     nmap \
     iproute2 \
     openssh-server \
+    sshpass \
+    bsdmainutils    \
+    bc \
     && apt-get clean
 
 COPY blue_scripts /home/hacker/blue_scripts

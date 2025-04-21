@@ -9,10 +9,11 @@ if [ "$#" -ne 1 ]; then
 fi
 
 HOSTNAME=$1
-LOG_FILE="/var/log/blue_agent_analyse_$HOSTNAME.log"
+LOG_FILE="/home/hacker/blue_scripts/log/blue_agent_analyse_$HOSTNAME.log"
 TMP_DIR="/tmp/blue_agent_analyse"
 
 # Ensure temporary directory exists
+mkdir -p "$(dirname "$LOG_FILE")"
 mkdir -p "$TMP_DIR"
 
 # Clear the log file
@@ -48,12 +49,15 @@ analyse_host() {
     echo "[*] Analysing host: $host" >> "$LOG_FILE"
 
     # Fetch list of files in temporary directory
-    ssh "$host" "find /tmp -type f" > "$TMP_DIR/files_list.txt" 2>/dev/null
+    sshpass -p "root" ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no root@"$host" "find /tmp -type f" > "$TMP_DIR/files_list.txt" 2>/dev/null
 
     while read -r file; do
         # Fetch the file to the local machine for analysis
-        scp "$host:$file" "$TMP_DIR/" 2>/dev/null
-
+        sshpass -p "root" scp -o StrictHostKeyChecking=no "$host:$file" "$TMP_DIR/" 2>/dev/null
+        if [ $? -ne 0 ]; then
+            echo "[!] Failed to copy $file from $host" >> "$LOG_FILE"
+            continue
+        fi
         local_file="$TMP_DIR/$(basename "$file")"
 
         # Calculate density (entropy)
