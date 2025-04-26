@@ -10,7 +10,7 @@ class ACOEmulator:
     def __init__(self):
         self.net = Containernet(controller=Controller)
 
-    def build(self, interactive:bool=False):
+    def build(self, interactive: bool=False):
         print("[+] Adding controller")
         self.net.addController('c0')
 

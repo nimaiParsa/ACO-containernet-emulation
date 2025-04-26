@@ -16,23 +16,11 @@ def main():
         pprint(env.get_observation())
         print("\n\n")
         
-        env.plot_graph()
-        
-        subnet = input("Enter subnet to discover (e.g., 10.0.0.0/24): ")
-        env.discover_remote_systems(subnet)
-        print("Updated Observation:")
-        pprint(env.get_observation())
-        print("\n\n")
-        
-        env.plot_graph()
-        
-        ip_addr = input("Enter a an IP Address to discover network services (e.g., 10.0.0.3): ")
-        env.discover_network(ip_addr)
-        print("Updated Observation:")
-        pprint(env.get_observation())
-        print("\n\n")
-        
-        env.plot_graph()
+        r1 = topo.net.get('r1')  # or topo.get('r1') if you’re using Mininet directly
+        for intf in r1.intfList():
+            if r1.IP(intf=intf.name):  # check if there's an IP assigned
+                print(f"{intf.name}: {r1.IP(intf=intf.name)}")
+
     
     except Exception as e:
         print(f"[!] Error: {e}")
@@ -70,12 +58,13 @@ def test():
         print("\n\n")
         env.plot_graph()
         
-        # env.drop_reverse_shell('user0', 'user2', 'root', 'root')
+        env.drop_reverse_shell('user0', 'user2', 'root', 'root')
         # env.execute_command_on('user2', command='cat /home/hacker/secret.txt')
  
         # print("Updated Observation:")
         # pprint(env.get_observation())
         # print("\n\n")
+        
         
         env.privilege_escalate('user2')
         print("Updated Observation:")
@@ -100,6 +89,12 @@ def test():
         print("Updated Observation:")
         pprint(env.get_observation())
         print("\n\n")
+        
+        env.discover_remote_systems('10.0.1.0/24')
+        
+        env.plot_graph()
+        
+        env.impact('op')
         
         env.plot_graph()
     
