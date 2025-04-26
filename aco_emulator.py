@@ -19,6 +19,7 @@ class ACOEmulator:
         user0 = self.net.addDocker('user0', ip='10.0.0.1/24', dimage="red_node", privileged=True)
         user1 = self.net.addDocker('user1', ip='10.0.0.2/24', dimage="red_node", privileged=True)
         user2 = self.net.addDocker('user2', ip='10.0.0.3/24', dimage="red_node", privileged=True)
+        blue0 = self.net.addDocker('blue0', ip='10.0.0.4/24', dimage="blue_node", privileged=True)
 
         # Subnet 2
         blue = self.net.addDocker('blue', ip='10.0.1.1/24', dimage="blue_node", privileged=True)
@@ -32,7 +33,7 @@ class ACOEmulator:
         s2 = self.net.addSwitch('s2')
 
         print("[+] Creating links\n\n")
-        for u in [user0, user1, user2]:
+        for u in [user0, user1, user2, blue0]:
             self.net.addLink(u, s1, cls=TCLink, bw=10)
 
         self.net.addLink(op, s2, cls=TCLink, bw=10)
@@ -72,6 +73,16 @@ class ACOEmulator:
         user0.cmd('service ssh start')
         user1.cmd('service ssh start')
         user2.cmd('service ssh start')
+        blue0.cmd('service ssh start')
+        print("[+] Starting tcpdump on blue0 to monitor users\n\n")
+        capture_dir = "/home/captures"
+        blue0.cmd(f"mkdir -p {capture_dir}")
+        
+        for user in [user0, user1, user2]:
+            user_ip = user.IP()
+            pcap_file = f"{capture_dir}/{user.name}.pcap"
+            # Capture only packets from that specific user's IP
+            blue0.cmd(f"tcpdump -i blue0-eth0 host {user_ip} -w {pcap_file} &")
 
         print("[+] Storing op server info on user2")
         user2.cmd('mkdir -p /home/hacker && echo "op=10.0.1.2" > /home/hacker/secret.txt')
@@ -82,6 +93,7 @@ class ACOEmulator:
             makeTerm(user0, title="user0 (Red Agent)")
             makeTerm(user1, title="user1")
             makeTerm(user2, title="user2")
+            makeTerm(blue0, title="blue0")
 
             CLI(self.net)
             self.net.stop()

@@ -155,6 +155,7 @@ class RedTeamEnv:
                 print(f"[+] Added services for {host}: {[s['port'] for s in services]}")
         else:
             print(f"[!] Host {target_ip} has no open ports.")
+        
             
     def plot_graph(self):
         """Plot the current reachability graph with node labels and colors."""

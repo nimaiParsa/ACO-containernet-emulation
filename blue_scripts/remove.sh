@@ -11,7 +11,9 @@ fi
 HOST_IP=$1
 LOG_FILE="/home/hacker/blue_scripts/log/blue_agent_remove_$HOST_IP.log"
 
-# Clear the log file
+
+mkdir -p "$(dirname "$LOG_FILE")"
+
 > "$LOG_FILE"
 
 # Function to terminate suspicious connections

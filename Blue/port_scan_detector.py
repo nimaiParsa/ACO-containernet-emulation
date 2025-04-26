@@ -1,57 +1,78 @@
+import base64
+import pyshark
+import os
 import time
 from Blue.detector import Detector
+import json
 
 class PortScanDetector(Detector):
-    def __init__(self, blue_mgr, threshold=10, time_window=5.0):
+    def __init__(self, blue_mgr,topo, threshold=10, time_window=5.0):
         """
         blue_mgr: instance of BlueObservationManager
+        pcap_directory: directory where the pcap files are stored
         threshold: number of distinct ports in time window to trigger scan detection
         time_window: seconds within which connections must occur
         """
         self.blue_mgr = blue_mgr
+        self.pcap_directory = "/home/captures/"
         self.threshold = threshold
         self.time_window = time_window
-        self.connection_logs = {}  # host -> list of (timestamp, dst_port)
+        self.topo = topo
 
     def detect(self, host):
-        """Detect port scanning behavior by analyzing active connections on the host."""
+        """
+        Detect if the given host is scanning many ports on other hosts.
+        If yes, return a list of IPs being scanned.
+        """
+        now = time.time()
+        # Gather basic connection information (already existing code)
+
+        # Step 1: Run PCAP processing in the Blue container
+        blue_host = self.blue_mgr.get_blue_host()
+        host_name = host.name
+        result = blue_host.cmd(f"python3 /home/scripts/pcap_processor.py {host_name}")
+        print(result)
+
+        try:
+            suspected_targets = json.loads(result)
+        except json.JSONDecodeError:
+            print(f"[ERROR] Failed to parse result from PCAP processor for host {host_name}: {result}")
+            return []
+
+        # Update the BlueObservationManager with the detected targets
+        victim_host_names = [self._ip_to_host(ip) for ip in suspected_targets]
+        self.blue_mgr.record_port_scan(host.name, victim_host_names)
+        return victim_host_names
+        return False
+
+    def _analyze_capture(self, capture):
+        """
+        Analyze the PCAP capture to detect scanning behavior.
+        """
+        scanned_targets = {}  # dst_ip -> list of (timestamp, dst_port)
+        suspected_ips = []
         now = time.time()
 
-        # Step 1: Fetch network connections from the host
-        netstat_output = host.cmd('netstat -ant')
-        
-        # Step 2: Parse connections
-        host_ips = host.IP()  # It may be a single IP, but BlueObservationManager tracks multiple IPs
-        if isinstance(host_ips, str):
-            host_ips = [host_ips]
+        for packet in capture:
+            if hasattr(packet, 'tcp') and hasattr(packet, 'ip'):
+                dst_ip = packet.ip.dst
+                dst_port = int(packet.tcp.dstport)
+                timestamp = float(packet.sniff_timestamp)
 
-        for line in netstat_output.splitlines():
-            if 'SYN_RECV' in line:  # Only track SYN_RECV (half-open) connections
-                parts = line.split()
-                if len(parts) < 5:
-                    continue  # skip malformed lines
+                if dst_ip not in scanned_targets:
+                    scanned_targets[dst_ip] = []
+                scanned_targets[dst_ip].append((timestamp, dst_port))
 
-                local_addr = parts[3]
-                remote_addr = parts[4]
+        for target_ip, attempts in scanned_targets.items():
+            # Filter attempts within the time window
+            recent_attempts = [(t, port) for (t, port) in attempts if now - t <= self.time_window]
+            unique_ports = set(port for (t, port) in recent_attempts)
 
-                try:
-                    local_ip, local_port = local_addr.rsplit(':', 1)
-                    remote_ip, remote_port = remote_addr.rsplit(':', 1)
-                    local_port = int(local_port)
-                    remote_port = int(remote_port)
-                except ValueError:
-                    continue  # skip badly formatted lines
+            if len(unique_ports) >= self.threshold:
+                suspected_ips.append(target_ip)
 
-                # Step 3: Check if this connection is incoming to this host
-                if local_ip in host_ips:
-                    attacker_ip = remote_ip
-                    dst_port = local_port
+        return suspected_ips
 
-                    attacker_name = self._ip_to_host(attacker_ip)
-                    if attacker_name:
-                        self.record_connection(attacker_name, dst_port)
-
-        return False  # detect() always returns False because detection is logged internally
 
     def record_connection(self, src_host, dst_port):
         """Record an outbound connection from src_host to dst_port."""

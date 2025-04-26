@@ -27,10 +27,11 @@ class BlueObservationManager:
         if host_name not in self.observations["hosts"]:
             self.observations["hosts"][host_name] = {
                 "ips": [ipaddress.IPv4Address(ip) for ip in ip_addresses],
-                "connections_out": [],
+                "connection": [],
+
                 "services_open": [],
                 "reverse_shell_detected": False,
-                "port_scan_detected": False,
+                "port_scan_detected": [],
                 "recent_login_failures": 0,
                 "isolated": False,
                 "compromised": False  # Optional ground-truth
@@ -75,15 +76,16 @@ class BlueObservationManager:
                 "timestamp": time.time()
             })
 
-    def record_port_scan(self, host_name):
+    def record_port_scan(self, host_name, victim_ip):
         """Flag that a port scan was detected."""
-        if host_name in self.observations["hosts"]:
-            self.observations["hosts"][host_name]["port_scan_detected"] = True
-            self.observations["network_events"].append({
-                "type": "port_scan_detected",
-                "host": host_name,
-                "timestamp": time.time()
-            })
+        for name in victim_ip:
+            if name in self.observations["hosts"]:
+                self.observations["hosts"][host_name]["port_scan_detected"].append(name)
+                self.observations["network_events"].append({
+                    "type": "port_scan_detected",
+                    "host": host_name,
+                    "timestamp": time.time(),   
+                })
 
     def record_login_failure(self, host_name):
         """Increment login failure count."""
