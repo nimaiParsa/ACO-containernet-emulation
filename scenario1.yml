@@ -1,0 +1,51 @@
+r1:
+  type: Router
+  cmds:
+    - sysctl -w net.ipv4.ip_forward=1
+    - iptables -F
+    - iptables -A FORWARD -s 10.0.0.1 -d 10.0.1.2 -j DROP
+    - iptables -A FORWARD -s 10.0.0.2 -d 10.0.1.2 -j DROP
+    - iptables -A FORWARD -s 10.0.0.3 -d 10.0.1.2 -j ACCEPT
+  neighbors: [s1, s2]
+
+s1:
+  type: Switch
+  cmds: []
+  neighbors: [r1, user0, user1, user2]
+
+s2:
+  type: Switch
+  cmds: []
+  neighbors: [r1, blue, op]
+
+user0:
+  type: Red
+  cmds:
+    - service ssh start
+  neighbors: [s1]
+
+user1:
+  type: Red
+  cmds:
+    - service ssh start
+  neighbors: [s1]
+
+user2:
+  type: Red
+  cmds:
+    - service ssh start
+    - mkdir -p /home/hacker
+    - echo "op=10.0.1.2" > /home/hacker/secret.txt
+  neighbors: [s1]
+
+blue:
+  type: Blue
+  cmds:
+    - service ssh start
+  neighbors: [s2]
+
+op:
+  type: Op
+  cmds:
+    - ./home/start_services.sh
+  neighbors: [s2]

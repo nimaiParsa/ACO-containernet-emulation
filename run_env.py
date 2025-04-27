@@ -2,12 +2,13 @@ from pprint import pprint
 from red_agent_env import RedTeamEnv
 from aco_emulator import ACOEmulator
 from mininet.log import setLogLevel
+from aco import ACO
 
 def main():
     setLogLevel('info')
     
     try:
-        topo = ACOEmulator()
+        topo = ACO('scenario1.yml')
         
         env = RedTeamEnv(topo)
         
@@ -16,11 +17,7 @@ def main():
         pprint(env.get_observation())
         print("\n\n")
         
-        r1 = topo.net.get('r1')  # or topo.get('r1') if you’re using Mininet directly
-        for intf in r1.intfList():
-            if r1.IP(intf=intf.name):  # check if there's an IP assigned
-                print(f"{intf.name}: {r1.IP(intf=intf.name)}")
-
+        print(topo.net.get('user0').cmd('ls'))
     
     except Exception as e:
         print(f"[!] Error: {e}")
@@ -33,7 +30,8 @@ def test():
     setLogLevel('info')
     
     try:
-        topo = ACOEmulator()
+        topo = ACO('scenario1.yml')
+        # topo = ACOEmulator()
         
         env = RedTeamEnv(topo)
         
@@ -58,13 +56,13 @@ def test():
         print("\n\n")
         env.plot_graph()
         
-        env.drop_reverse_shell('user0', 'user2', 'root', 'root')
-        # env.execute_command_on('user2', command='cat /home/hacker/secret.txt')
+        env.drop_reverse_shell('user0', 'user2', 'hacker', '1234')
  
-        # print("Updated Observation:")
-        # pprint(env.get_observation())
-        # print("\n\n")
+        print("Updated Observation:")
+        pprint(env.get_observation())
+        print("\n\n")
         
+        env.plot_graph()
         
         env.privilege_escalate('user2')
         print("Updated Observation:")
@@ -73,10 +71,7 @@ def test():
         env.plot_graph()
         
         
-        # print("Updated Observation:")
-        # pprint(env.get_observation())
-        # print("\n\n")
-        
+    
         env.discover_network('10.0.1.2')
         # env.drop_reverse_shell('user2', 'op', 'root', 'root')
         print("Updated Observation:")
@@ -84,13 +79,27 @@ def test():
         print("\n\n")
         env.plot_graph()
         
+        # return
+        env.drop_reverse_shell('user2', 'op', 'hacker', '1234')
+        print("Updated Observation:")
+        pprint(env.get_observation())
+        print("\n\n")
+        env.plot_graph()
+        
+        
         env.privilege_escalate('op')
         
         print("Updated Observation:")
         pprint(env.get_observation())
         print("\n\n")
         
+        env.plot_graph()
+        
         env.discover_remote_systems('10.0.1.0/24')
+        
+        print("Updated Observation:")
+        pprint(env.get_observation())
+        print("\n\n")
         
         env.plot_graph()
         

