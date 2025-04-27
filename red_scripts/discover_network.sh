@@ -12,7 +12,7 @@ fi
 
 
 # Run a TCP SYN scan on common ports with service version detection
-nmap -p 22,80,443,8080 -sS -sV -T4 --open "$TARGET_IP"
+sudo nmap -p 22,80,443,8080 -sT --open "$TARGET_IP"
 
 echo "[*] Running Nmap service discovery on $TARGET_IP..."
 echo "[*] Service discovery completed."

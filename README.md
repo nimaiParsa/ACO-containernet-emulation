@@ -172,3 +172,5 @@ make clean   # Stop simulation and remove containers
 <!-- MIT License — use freely for research, education, and development. -->
 
 <!-- --- -->
+
+sudo -E env PATH=$PATH python3 blue_agent_tester.py

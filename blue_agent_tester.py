@@ -3,6 +3,7 @@ import time
 from Blue.blue_observation_manager import BlueObservationManager
 from Blue.port_scan_detector import PortScanDetector
 from Blue.connection_detector import ConnectionDetector
+from red_agent_env import RedTeamEnv
 from aco_emulator import ACOEmulator
 
 class Action:
@@ -69,9 +70,11 @@ def policy_fn(detections):
 if __name__ == "__main__":
     
     try:
+        topo = ACOEmulator()
+        env_red = RedTeamEnv(topo)
     
         blue_mgr = BlueObservationManager()
-        port_scan_detector = PortScanDetector(blue_mgr, threshold=5, time_window=5.0)
+        port_scan_detector = PortScanDetector(blue_mgr,topo, threshold=5, time_window=5.0)
         connection_detector = ConnectionDetector(blue_mgr)
         detection_modules = [port_scan_detector]
 
@@ -79,8 +82,8 @@ if __name__ == "__main__":
         #     'block_attacker': BlockHostAction(blue_mgr)  # Some action you define
         # }
 
-        topo = ACOEmulator()
-        topo.build(interactive=False)
+
+        # topo.build(interactive=False)
 
         for host in topo.net.hosts:
             ip = host.IP()
@@ -91,15 +94,24 @@ if __name__ == "__main__":
             # monitor = BlueAgent(detection_modules, policy_fn, response_map, topo)
             # monitor.monitor(hosts=['user0'])
             
-        pprint(blue_mgr.get_observations())
 
         port_scan_detector.detect(topo.net.get('user0'))
 
-        pprint(blue_mgr.get_observations())
+        # pprint(blue_mgr.get_observations())
 
-        connection_detector.detect(topo.net.get('user0'))
+        ip_addr = '10.0.0.3'
+        env_red.discover_remote_systems('10.0.0.1/24')
+        env_red.discover_network(ip_addr)
 
-        pprint(blue_mgr.get_observations())
+        # pprint(env_red.observations)
+        # print(topo.net.get('blue0').cmd('cd /home/captures && ls'))
+        port_scan_detector.detect(topo.net.get('user0'))
+
+        # pprint(blue_mgr.get_observations())
+
+        # connection_detector.detect(topo.net.get('user0'))
+
+        # pprint(blue_mgr.get_observations())
 
     except KeyboardInterrupt:
         print("\n[INFO] Shutting down...")
