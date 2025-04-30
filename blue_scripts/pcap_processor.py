@@ -4,7 +4,7 @@ import os
 import time
 import sys
 
-def detect_port_scan_realtime(pcap_file, host_ip, port_threshold=10, interval=5, iterations=2):
+def detect_port_scan(pcap_file, host_ip, port_threshold=10, interval=5, iterations=2):
     """
     Real-time port scan detection from a continuously updated pcap file.
 
@@ -37,6 +37,7 @@ def detect_port_scan_realtime(pcap_file, host_ip, port_threshold=10, interval=5,
 
             if potential_targets:
                 print(f"Potential scan targets detected: {potential_targets}")
+                print(potential_targets)
                 return potential_targets
             time.sleep(interval)
 
@@ -53,4 +54,4 @@ if __name__ == "__main__":
     port_threshold = 10
     interval = 5  
     print("Starting real-time port scan detection...")
-    detect_port_scan_realtime(pcap_file, host_ip, port_threshold, interval)
+    detect_port_scan(pcap_file, host_ip, port_threshold, interval)

@@ -4,6 +4,7 @@ import os
 import time
 from Blue.detector import Detector
 import json
+import re
 
 class PortScanDetector(Detector):
     def __init__(self, blue_mgr,topo, threshold=10, time_window=5.0):
@@ -29,6 +30,13 @@ class PortScanDetector(Detector):
         host_name = host.name
         host_ip = host.IP()
         result = blue_host.cmd(f"python3 /home/hacker/blue_scripts/pcap_processor.py {host_ip}")
+        match = re.search(r'\[(.*?)\]', result)
+        if match:
+            result = match.group(1)
+        else:
+            print(f"[ERROR] No valid content found in result for host {host_name}: {result}")
+            return []
+
         print(result)
 
         try:

