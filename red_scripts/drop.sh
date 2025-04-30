@@ -14,6 +14,7 @@ fi
 
 # === GENERATE RANDOM FLOAT BETWEEN 0 AND 1 ===
 rand_float=$(awk -v r1=$RANDOM -v r2=$RANDOM 'BEGIN { srand(); print (r1 * 32768 + r2) / 1073741824 }')
+mkdir -p "/home/tmp/drops"
 
 # === DETERMINE DENSITY RANGE BASED ON THRESHOLD ===
 if (( $(echo "$rand_float <= $PROB_THRESHOLD" | bc -l) )); then
@@ -34,8 +35,8 @@ dd if=/dev/zero bs=1 count="$zero_bytes" status=none >> "/home/tmp/drops/$OUTPUT
 
 # === SHUFFLE CONTENT ===
 tmpfile=$(mktemp)
-fold -w1 "$OUTPUT_FILE" | shuf | tr -d '\n' > "$tmpfile"
-mv "$tmpfile" "$OUTPUT_FILE"
+fold -w1 "/home/tmp/drops/$OUTPUT_FILE" | shuf | tr -d '\n' > "$tmpfile"
+mv "$tmpfile" "/home/tmp/drops/$OUTPUT_FILE"
 
 # === REPORT ===
 echo "Generated $OUTPUT_FILE" 

@@ -7,6 +7,7 @@ from Blue.block_ip import BlockIPAction
 from red_agent_env import RedTeamEnv
 from aco_emulator import ACOEmulator
 from Blue.port_scan_detector import PortScanDetector
+from Blue.density_detector import DensityDetector
 from aco import ACO 
 from mininet.net import Containernet
 from time import sleep
@@ -24,6 +25,7 @@ if __name__ == "__main__":
         env_red = RedTeamEnv(topo)
     
         blue_mgr = BlueObservationManager()
+        density_detector = DensityDetector(blue_mgr, topo, threshold=5, time_window=5.0)
         port_scan_detector = PortScanDetector(blue_mgr,topo, threshold=5, time_window=5.0)
         connection_detector = ConnectionDetector(blue_mgr)
         detection_modules = [port_scan_detector]
@@ -50,10 +52,13 @@ if __name__ == "__main__":
         
         blue0.cmd("ip link set eth0 promisc on")
 
-        print(user0.cmd("nmap 10.0.0.2"))
-        print(user0.cmd("nmap 10.0.0.3"))
-        print(blue0.cmd("ls -lh /home/hacker/blue_scripts/"))
+        # print(user0.cmd("nmap 10.0.0.3"))
+        # print(user0.cmd("nmap 10.0.0.4"))
+        print(user0.cmd("bash ./home/hacker/red_scripts/drop.sh 0.6 a.bin"))
+        
+        # print(blue0.cmd("ls -lh /home/hacker/blue_scripts/"))
         port_scan_detector.detect(user0)
+        density_detector.detect(user0)
         pprint(blue_mgr.get_observations())
         # print(blue0.cmd("python3 /home/hacker/blue_scripts/pcap_processor.py 10.0.0.2"))
 

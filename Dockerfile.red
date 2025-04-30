@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
     binutils \
     sudo \
     iptables \
+    bc \
     && rm -rf /var/lib/apt/lists/*
 
 # Create user with weak password

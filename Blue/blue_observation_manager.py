@@ -28,7 +28,7 @@ class BlueObservationManager:
             self.observations["hosts"][host_name] = {
                 "ips": [ipaddress.IPv4Address(ip) for ip in ip_addresses],
                 "connection": [],
-
+                "density": 0,
                 "services_open": [],
                 "reverse_shell_detected": False,
                 "port_scan_detected": [],
