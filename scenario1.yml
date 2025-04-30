@@ -2,10 +2,25 @@ r1:
   type: Router
   cmds:
     - sysctl -w net.ipv4.ip_forward=1
-    - iptables -F
-    - iptables -A FORWARD -s 10.0.0.1 -d 10.0.1.2 -j DROP
-    - iptables -A FORWARD -s 10.0.0.2 -d 10.0.1.2 -j DROP
-    - iptables -A FORWARD -s 10.0.0.3 -d 10.0.1.2 -j ACCEPT
+    # - iptables -F
+    # - iptables -A FORWARD -s ${user0} -d ${op} -j ACCEPT
+    # - iptables -A FORWARD -s ${user1} -d ${op} -j ACCEPT
+    # - iptables -A FORWARD -s ${user2} -d ${op} -j ACCEPT
+
+    # - iptables -A FORWARD -s ${user0} -d ${blue} -j ACCEPT
+    # - iptables -A FORWARD -s ${user1} -d ${blue} -j ACCEPT
+    # - iptables -A FORWARD -s ${user2} -d ${blue} -j ACCEPT
+
+    # - iptables -A FORWARD -s ${blue} -d ${user0} -j ACCEPT
+    # - iptables -A FORWARD -s ${blue} -d ${user1} -j ACCEPT
+    # - iptables -A FORWARD -s ${blue} -d ${user2} -j ACCEPT
+    # - iptables -A FORWARD -s ${op} -d ${user0} -j ACCEPT
+    # - iptables -A FORWARD -s ${op} -d ${user1} -j ACCEPT
+    # - iptables -A FORWARD -s ${op} -d ${user2} -j ACCEPT
+
+    # - ip route del 10.0.0.0/8
+    # - ip route add 10.0.1.0/24 dev r1-eth1
+    # - ip route add 10.0.0.0/24 dev r1-eth0
   neighbors: [s1, s2]
 
 s1:
@@ -21,31 +36,41 @@ s2:
 user0:
   type: Red
   cmds:
+    - ip route del default
+    - ip route add default via ${r1[0]} dev user0-eth0
     - service ssh start
   neighbors: [s1]
 
 user1:
   type: Red
   cmds:
+    - ip route del default
+    - ip route add default via ${r1[0]} dev user1-eth0
     - service ssh start
   neighbors: [s1]
 
 user2:
   type: Red
   cmds:
-    - service ssh start
+    - ip route del default
+    - ip route add default via ${r1[0]} dev user2-eth0
     - mkdir -p /home/hacker
-    - echo "op=10.0.1.2" > /home/hacker/secret.txt
+    - service ssh start
+    - echo "op=${op}" > /home/hacker/secret.txt
   neighbors: [s1]
 
 blue:
   type: Blue
   cmds:
+    - ip route del default
+    - ip route add default via ${r1[1]} dev blue-eth0
     - service ssh start
   neighbors: [s2]
 
 op:
   type: Op
   cmds:
-    - ./home/start_services.sh
+    - ip route del default
+    - ip route add default via ${r1[1]} dev op-eth0
+    - bash home/start_services.sh
   neighbors: [s2]

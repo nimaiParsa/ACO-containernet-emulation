@@ -28,9 +28,9 @@ class PortScanDetector(Detector):
         # Gather basic connection information (already existing code)
 
         # Step 1: Run PCAP processing in the Blue container
-        blue_host = self.blue_mgr.get_blue_host()
-        host_name = host.name
-        result = blue_host.cmd(f"python3 /home/scripts/pcap_processor.py {host_name}")
+        blue_host = self.topo.net.get("blue0")
+        host_name = host
+        result = blue_host.cmd(f"python3 /home/hacker/blue_scripts/pcap_processor.py {host_name}")
         print(result)
 
         try:

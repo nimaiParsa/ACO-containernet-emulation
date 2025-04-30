@@ -1,0 +1,132 @@
+r1:
+  type: Router
+  cmds:
+    - sysctl -w net.ipv4.ip_forward=1
+    # r1 needs routes to the s2‐subnet and s3‐subnet via r2
+    - ip route add 10.0.1.0/24 via ${r2[0]} dev r1-eth1
+    - ip route add 10.0.2.0/24 via ${r2[0]} dev r1-eth1
+    # plus any router‐to‐router /30 links beyond r2
+    # - ip route add 10.0.10.0/30 via ${r2[0]}
+  neighbors: [s1, r2]
+
+r2:
+  type: Router
+  cmds:
+    - sysctl -w net.ipv4.ip_forward=1
+    # r2 needs to know how to reach s1‐subnet via r1, and s3‐subnet via r3
+    - ip route add 10.0.0.0/24 via ${r1[1]} dev r2-eth0
+    - ip route add 10.0.2.0/24 via ${r3[0]} dev r2-eth2
+    # router‐to‐router links
+    # - ip route add 10.0.8.0/30 via ${r1[0]}
+    # - ip route add 10.0.12.0/30 via ${r3[0]}
+  neighbors: [r1, s2, r3]
+
+r3:
+  type: Router
+  cmds:
+    - sysctl -w net.ipv4.ip_forward=1
+    # r3 needs routes to s1‐subnet & s2‐subnet via r2
+    - ip route add 10.0.0.0/24 via ${r2[2]} dev r3-eth0
+    - ip route add 10.0.1.0/24 via ${r2[2]} dev r3-eth0
+    # router‐to‐router links
+    # - ip route add 10.0.10.0/30 via ${r2[0]}
+  neighbors: [r2, s3]
+
+s1:
+  type: Switch
+  cmds: []
+  neighbors: [r1, user0, user1, user2, blue0]
+
+s2:
+  type: Switch
+  cmds: []
+  neighbors: [r2, user3, user4, blue1]
+
+s3:
+  type: Switch
+  cmds: []
+  neighbors: [r3, user5, op, blue2]
+
+user0:
+  type: Red
+  cmds:
+    - ip route del default
+    - ip route add default via ${r1[0]} dev user0-eth0
+    - service ssh start
+  neighbors: [s1]
+
+user1:
+  type: Red
+  cmds:
+    - ip route del default
+    - ip route add default via ${r1[0]} dev user1-eth0
+    - service ssh start
+  neighbors: [s1]
+
+user2:
+  type: Red
+  cmds:
+    - ip route del default
+    - ip route add default via ${r1[0]} dev user2-eth0
+    - mkdir -p /home/hacker
+    - service ssh start
+    - echo "user3=${user3}" > /home/hacker/secret.txt
+  neighbors: [s1]
+
+user3:
+  type: Red
+  cmds:
+    - ip route del default
+    - ip route add default via ${r2[1]} dev user3-eth0
+    - service ssh start
+  neighbors: [s2]
+
+user4:
+  type: Red
+  cmds:
+    - ip route del default
+    - ip route add default via ${r2[1]} dev user4-eth0
+    - mkdir -p /home/hacker
+    - service ssh start
+    - echo "user5=${user5}" > /home/hacker/secret.txt
+  neighbors: [s2]
+
+user5:
+  type: Red
+  cmds:
+    - ip route del default
+    - ip route add default via ${r3[1]} dev user5-eth0
+    - service ssh start
+  neighbors: [s3]
+
+blue0:
+  type: Blue
+  cmds:
+    - ip route del default
+    - ip route add default via ${r1[0]} dev blue0-eth0
+    - service ssh start
+  neighbors: [s1]
+
+blue1:
+  type: Blue
+  cmds:
+    - ip route del default
+    - ip route add default via ${r2[1]} dev blue1-eth0
+    - service ssh start
+  neighbors: [s2]
+
+blue2:
+  type: Blue
+  cmds:
+    - ip route del default
+    - ip route add default via ${r3[1]} dev blue2-eth0
+    - service ssh start
+  neighbors: [s3]
+
+op:
+  type: Op
+  cmds:
+    - ip route del default
+    - ip route add default via ${r3[1]} dev op-eth0
+    - bash home/start_services.sh
+  neighbors: [s3]

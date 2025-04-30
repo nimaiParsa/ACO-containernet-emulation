@@ -5,6 +5,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install tools for network monitoring and SSH (if needed for remote inspection)
 RUN apt-get update && apt-get install -y \
     iputils-ping \
+    python3 \
+    python3-pip \
     net-tools \
     iptables\
     tcpdump \
@@ -17,6 +19,9 @@ RUN apt-get update && apt-get install -y \
     bsdmainutils    \
     bc \
     && apt-get clean
+
+RUN pip3 install pyshark
+
 
 COPY blue_scripts /home/hacker/blue_scripts
 RUN chmod +x /home/hacker/blue_scripts/*.sh

