@@ -1,4 +1,5 @@
 import base64
+import ipaddress
 import pyshark
 import os
 import time
@@ -41,6 +42,7 @@ class PortScanDetector(Detector):
         print(result)
 
         suspected_targets = result.split(',')
+        suspected_targets = [target.strip("'\"") for target in suspected_targets]
 
         victim_host_names = [self._ip_to_host(ip) for ip in suspected_targets]
         self.record_port_scan(host.name, victim_host_names)
@@ -92,8 +94,10 @@ class PortScanDetector(Detector):
 
     def _ip_to_host(self, ip):
         """Helper function to find host name by IP from BlueObservationManager."""
+        ip = ipaddress.IPv4Address(ip)  # Clean up and convert
+
         for host_name, data in self.blue_mgr.observations["hosts"].items():
             for known_ip in data["ips"]:  # data["ips"] is now a list
-                if str(known_ip) == str(ip):
+                if ip == ipaddress.IPv4Address(str(known_ip).strip("'\"")):
                     return host_name
         return None
