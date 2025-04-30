@@ -22,7 +22,7 @@ class ConnectionDetector(Detector):
             host_ips = [host_ips]
 
         for line in netstat_output.splitlines():
-            if 'ESTABLISHED' in line or 'SYN_SENT' in line or 'SYN_RECV' in line:
+            if 'ESTABLISHED' in line :
                 parts = line.split()
                 if len(parts) < 5:
                     continue
@@ -35,27 +35,31 @@ class ConnectionDetector(Detector):
                     remote_ip, remote_port = remote_addr.rsplit(':', 1)
                 except ValueError:
                     continue
-
                 # Only consider outgoing or incoming connections
-                if local_ip in host_ips or remote_ip in host_ips:
-                    # Add the "other side" IP
-                    if local_ip in host_ips:
-                        connected_hosts.add(remote_ip)
-                    else:
-                        connected_hosts.add(local_ip)
+                # print(self.blue_mgr.get_observations()["hosts"])
+                if self._ip_to_host(local_ip) and self._ip_to_host(remote_ip):
+                    print(f"[DEBUG] Found new connection: {local_ip} -> {remote_ip}")
+                    connected_hosts.add(remote_ip)
 
         for host in connected_hosts:
-            host_name = self._ip_to_host(host)
-            if host in self.blue_mgr.get_observations()["hosts"]:
-                self.blue_mgr.get_observations()["hosts"][host]["connection"].append(host_name)
+            self.record_connection(local_ip,remote_ip)
 
         return False
     
     def _ip_to_host(self, ip):
-        """
-        Convert an IP address to a host name.
-        """
-        for host_name, host_info in self.blue_mgr.get_observations()["hosts"].items():
-            if ip in host_info["ips"]:
-                return host_name
+        """Helper function to find host name by IP from BlueObservationManager."""
+        for host_name, data in self.blue_mgr.observations["hosts"].items():
+            for known_ip in data["ips"]:  # data["ips"] is now a list
+                if str(known_ip) == str(ip):
+                    return host_name
         return None
+
+    
+    def record_connection(self, host_name, host):
+        """
+        Record the connection in the BlueObservationManager.
+        """
+        print(f"[INFO] Recording connection from {host_name} to {host}")
+        self.blue_mgr.get_observations()["hosts"][self._ip_to_host(host_name)]["connection"].append(host)
+        self.blue_mgr.get_observations()["hosts"][self._ip_to_host(host)]["connection"].append(host_name)
+        print(f"[INFO] Recorded connection from {host_name} to {host}")

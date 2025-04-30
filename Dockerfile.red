@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     iputils-ping \
     traceroute \
     net-tools \
+    tcpdump \
     iproute2 \
     curl \
     sshpass \
@@ -19,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     python3 \
     binutils \
     sudo \
+    iptables \
     && rm -rf /var/lib/apt/lists/*
 
 # Create user with weak password

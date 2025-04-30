@@ -25,12 +25,10 @@ class PortScanDetector(Detector):
         If yes, return a list of IPs being scanned.
         """
         now = time.time()
-        # Gather basic connection information (already existing code)
-
-        # Step 1: Run PCAP processing in the Blue container
-        blue_host = self.topo.net.get("blue0")
-        host_name = host
-        result = blue_host.cmd(f"python3 /home/hacker/blue_scripts/pcap_processor.py {host_name}")
+        blue_host = self.topo.net.get('blue0')
+        host_name = host.name
+        host_ip = host.IP()
+        result = blue_host.cmd(f"python3 /home/hacker/blue_scripts/pcap_processor.py {host_ip}")
         print(result)
 
         try:
@@ -39,39 +37,20 @@ class PortScanDetector(Detector):
             print(f"[ERROR] Failed to parse result from PCAP processor for host {host_name}: {result}")
             return []
 
-        # Update the BlueObservationManager with the detected targets
         victim_host_names = [self._ip_to_host(ip) for ip in suspected_targets]
         self.blue_mgr.record_port_scan(host.name, victim_host_names)
-        return victim_host_names
+        # return victim_host_names
         return False
-
-    def _analyze_capture(self, capture):
+    
+    def record_port_scan(self, src_host, victim_host_names):
         """
-        Analyze the PCAP capture to detect scanning behavior.
+        Record a port scan event in the BlueObservationManager.
+        :param src_host: Source host initiating the scan
+        :param victim_host_names: List of victim host names being scanned
         """
-        scanned_targets = {}  # dst_ip -> list of (timestamp, dst_port)
-        suspected_ips = []
-        now = time.time()
-
-        for packet in capture:
-            if hasattr(packet, 'tcp') and hasattr(packet, 'ip'):
-                dst_ip = packet.ip.dst
-                dst_port = int(packet.tcp.dstport)
-                timestamp = float(packet.sniff_timestamp)
-
-                if dst_ip not in scanned_targets:
-                    scanned_targets[dst_ip] = []
-                scanned_targets[dst_ip].append((timestamp, dst_port))
-
-        for target_ip, attempts in scanned_targets.items():
-            # Filter attempts within the time window
-            recent_attempts = [(t, port) for (t, port) in attempts if now - t <= self.time_window]
-            unique_ports = set(port for (t, port) in recent_attempts)
-
-            if len(unique_ports) >= self.threshold:
-                suspected_ips.append(target_ip)
-
-        return suspected_ips
+        for victim_host_name in victim_host_names:
+            if victim_host_name in self.blue_mgr.observations["hosts"]:
+                victim_host = self.blue_mgr.get_observations()["hosts"][src_host]["port_scan_detected"].append(victim_host_name)
 
 
     def record_connection(self, src_host, dst_port):
