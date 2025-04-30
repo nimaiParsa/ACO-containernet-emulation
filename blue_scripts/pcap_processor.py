@@ -1,63 +1,56 @@
-import sys
-import pyshark
-import json
+from scapy.all import sniff, IP, TCP, rdpcap
 from collections import defaultdict
+import os
+import time
+import sys
 
-def analyze_pcap(host_name):
-    pcap_file_path = f"/home/captures/{host_name}.pcap"
-    suspected_targets = set()
-    scan_activity = defaultdict(list)  # target_ip -> list of scanned ports
+def detect_port_scan_realtime(pcap_file, host_ip, port_threshold=10, interval=5, iterations=2):
+    """
+    Real-time port scan detection from a continuously updated pcap file.
 
-    try:
-        # Read the PCAP file
-        capture = pyshark.FileCapture(pcap_file_path)
+    :param pcap_file: Path to the continuously updated pcap file.
+    :param host_ip: Source IP to monitor for port scanning activity.
+    :param port_threshold: Minimum unique destination ports to flag a scan.
+    :param interval: Time interval (seconds) to check for new packets.
+    """
+    print(f"Monitoring {pcap_file} for port scans by {host_ip}...")
+    dest_ports = defaultdict(set)  
+    processed_packets = 0  
 
-        for packet in capture:
-            try:
-                # Check for TCP packets
-                if 'IP' in packet and 'TCP' in packet:
-                    src_ip = packet.ip.src
-                    dst_ip = packet.ip.dst
-                    dst_port = int(packet.tcp.dstport)
+    for _ in range(iterations):
+        try:
+            packets = rdpcap(pcap_file)
 
-                    # Check if this packet might be part of a scan
-                    if src_ip.startswith('10.0.0.'):  # Host initiating the scan
-                        scan_activity[dst_ip].append(dst_port)
+            new_packets = packets[processed_packets:]  
+            print(f"Processing {len(new_packets)} new packets...")
+            for packet in new_packets:
+                if IP in packet and packet[IP].src == host_ip:
+                    dest_ip = packet[IP].dst
+                    if TCP in packet:
+                        dest_ports[dest_ip].add(packet[TCP].dport)
 
-                # Check for nmap-like UDP scanning (optional, expand if necessary)
-                elif 'IP' in packet and 'UDP' in packet:
-                    src_ip = packet.ip.src
-                    dst_ip = packet.ip.dst
-                    dst_port = int(packet.udp.dstport)
+            processed_packets += len(new_packets) 
 
-                    if src_ip.startswith('10.0.0.'):  # Host initiating the scan
-                        scan_activity[dst_ip].append(dst_port)
+            potential_targets = [
+                dest_ip for dest_ip, ports in dest_ports.items() if len(ports) >= port_threshold
+            ]
 
-            except AttributeError:
-                continue  # Skip packets without relevant fields
+            if potential_targets:
+                print(f"Potential scan targets detected: {potential_targets}")
+                return potential_targets
+            time.sleep(interval)
 
-        capture.close()
-
-        # Analyze scanning behavior
-        for target_ip, ports in scan_activity.items():
-            unique_ports = set(ports)
-
-            # If too many unique ports are probed in a short time, flag it
-            if len(unique_ports) > 10:  # Threshold for port scanning
-                suspected_targets.add(target_ip)
-
-    except Exception as e:
-        print(f"[ERROR] Failed to process PCAP for {host_name}: {e}")
-        sys.exit(1)
-
-    return list(suspected_targets)
-
+        except KeyboardInterrupt:
+            print("Stopping real-time monitoring.")
+            break
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            break
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("[ERROR] Host name argument missing.")
-        sys.exit(1)
-
-    host_name = sys.argv[1]
-    suspected_targets = analyze_pcap(host_name)
-    print(json.dumps(suspected_targets))
+    pcap_file = "/home/hacker/blue_scripts/mirrored_traffic.pcap"
+    host_ip = sys.argv[1]
+    port_threshold = 10
+    interval = 5  
+    print("Starting real-time port scan detection...")
+    detect_port_scan_realtime(pcap_file, host_ip, port_threshold, interval)

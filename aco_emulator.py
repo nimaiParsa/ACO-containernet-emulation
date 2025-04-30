@@ -1,5 +1,5 @@
 from mininet.net import Containernet
-from mininet.node import Controller, Docker
+from mininet.node import Controller, Docker, OVSSwitch
 from mininet.link import TCLink
 from mininet.cli import CLI
 from mininet.log import setLogLevel
@@ -29,8 +29,8 @@ class ACOEmulator:
         r1 = self.net.addDocker('r1', ip='0.0.0.0', dimage="blue_node", privileged=True)
 
         print("[+] Adding switches\n\n")
-        s1 = self.net.addSwitch('s1')
-        s2 = self.net.addSwitch('s2')
+        s1 = self.net.addSwitch('s1', cls = OVSSwitch)
+        s2 = self.net.addSwitch('s2', cls = OVSSwitch)
 
         print("[+] Creating links\n\n")
         for u in [user0, user1, user2, blue0]:
@@ -76,12 +76,26 @@ class ACOEmulator:
         blue0.cmd('service ssh start')
         print("[+] Starting tcpdump on blue0 to monitor users\n\n")
         capture_dir = "/home/captures"
+
         blue0.cmd(f"mkdir -p {capture_dir}")
+        blue_port = "s1-eth4"
+
+        # Set up mirroring
+        mirror_cmd = (
+            f"ovs-vsctl -- --id=@p get Port {blue_port} "
+            f"-- --id=@m create Mirror name=blueMirror select-all=true output-port=@p "
+            f"-- set Bridge s1 mirrors=@m"
+        )
+        s1.cmd(mirror_cmd)
+
+        # Enable promiscuous mode and start tcpdump
+        blue0.cmd("tcpdump -i blue0-eth0 -w /home/hacker/blue_scripts/mirrored_traffic.pcap &")
         
         for user in [user0, user1, user2]:
             user_ip = user.IP()
             pcap_file = f"{capture_dir}/{user.name}.pcap"
             # Capture only packets from that specific user's IP
+
             blue0.cmd(f"tcpdump -i blue0-eth0 host {user_ip} -w {pcap_file} &")
 
         print("[+] Storing op server info on user2")

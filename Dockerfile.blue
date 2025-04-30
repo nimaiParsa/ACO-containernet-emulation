@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y \
     sshpass \
     binutils \
     bsdmainutils    \
+    python3 \
+    python3-pip \
+    scapy \
     bc \
     && apt-get clean
 
