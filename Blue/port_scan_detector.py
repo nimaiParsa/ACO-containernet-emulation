@@ -32,6 +32,7 @@ class PortScanDetector(Detector):
         result = blue_host.cmd(f"python3 /home/hacker/blue_scripts/pcap_processor.py {host_ip}")
         match = re.search(r'\[(.*?)\]', result)
         if match:
+            print(f"Potential scan targets detected: {match.group(1)}")
             result = match.group(1)
         else:
             print(f"[ERROR] No valid content found in result for host {host_name}: {result}")
@@ -39,14 +40,10 @@ class PortScanDetector(Detector):
 
         print(result)
 
-        try:
-            suspected_targets = json.loads(result)
-        except json.JSONDecodeError:
-            print(f"[ERROR] Failed to parse result from PCAP processor for host {host_name}: {result}")
-            return []
+        suspected_targets = result.split(',')
 
         victim_host_names = [self._ip_to_host(ip) for ip in suspected_targets]
-        self.blue_mgr.record_port_scan(host.name, victim_host_names)
+        self.record_port_scan(host.name, victim_host_names)
         # return victim_host_names
         return False
     
@@ -56,9 +53,10 @@ class PortScanDetector(Detector):
         :param src_host: Source host initiating the scan
         :param victim_host_names: List of victim host names being scanned
         """
+        print(f"[DETECT] Port scan detected from {src_host} to {victim_host_names}!")
         for victim_host_name in victim_host_names:
             if victim_host_name in self.blue_mgr.observations["hosts"]:
-                victim_host = self.blue_mgr.get_observations()["hosts"][src_host]["port_scan_detected"].append(victim_host_name)
+                self.blue_mgr.get_observations()["hosts"][src_host]["port_scan_detected"].append(victim_host_name)
 
 
     def record_connection(self, src_host, dst_port):
