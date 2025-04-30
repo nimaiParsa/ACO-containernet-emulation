@@ -102,10 +102,13 @@ class ACO:
                         break
         # resolve & run cmds
         self._resolve_commands()
+        
+        
         for dev, info in self.devices.items():
             for cmd in info.get('cmds',[]):
                 print(cmd)
                 if cmd.strip(): self.node_objs[dev].cmd(cmd)
+        CLI(self.net)
         if interactive: CLI(self.net); self.net.stop()
 
     def _resolve_commands(self):

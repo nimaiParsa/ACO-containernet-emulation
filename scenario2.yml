@@ -34,7 +34,8 @@ r3:
 
 s1:
   type: Switch
-  cmds: []
+  cmds: 
+    - ovs-vsctl -- --id=@p get Port s1-eth5 -- --id=@m create Mirror name=blueMirror select-all=true output-port=@p -- set Bridge s1 mirrors=@m 
   neighbors: [r1, user0, user1, user2, blue0]
 
 s2:
@@ -104,6 +105,11 @@ blue0:
   cmds:
     - ip route del default
     - ip route add default via ${r1[0]} dev blue0-eth0
+    - mkdir -p /home/captures
+    - tcpdump -i blue0-eth0 -w /home/hacker/blue_scripts/mirrored_traffic.pcap &
+    - tcpdump -i blue0-eth0 host ${user0} -w /home/captures/user0.pcap &
+    - tcpdump -i blue0-eth0 host ${user1} -w /home/captures/user1.pcap &
+    - tcpdump -i blue0-eth0 host ${user2} -w /home/captures/user2.pcap &
     - service ssh start
   neighbors: [s1]
 
