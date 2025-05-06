@@ -224,7 +224,7 @@ def main():
     setLogLevel('info')
     
     try:
-        topo = ACO('scenario2.yml')
+        topo = ACO('scenarios/scenario2.yml')
         env = RedTeamEnv(topo)
         
         # Launch for ploting the graph

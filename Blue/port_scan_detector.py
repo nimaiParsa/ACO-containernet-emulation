@@ -26,18 +26,24 @@ class PortScanDetector(Detector):
         Detect if the given host is scanning many ports on other hosts.
         If yes, return a list of IPs being scanned.
         """
+        #identify the subnet number of the host
+        host_ip = host.IP()
         now = time.time()
         blue_host = self.topo.net.get('blue0')
         host_name = host.name
         host_ip = host.IP()
-        result = blue_host.cmd(f"python3 /home/hacker/blue_scripts/pcap_processor.py {host_ip}")
+        # print(f"[INFO] Detecting port scan for host {host_name} with IP {host_ip}")
+        print(blue_host.cmd(f"ls -lh /home/hacker/blue_scripts/"))
+        # result = blue_host.cmd(f"python3 /home/hacker/blue_scripts/pcap_processor.py {host_ip}")
+        print(f"[INFO] Result from pcap_processor.py: {result}")
         match = re.search(r'\[(.*?)\]', result)
         if match:
-            print(f"Potential scan targets detected: {match.group(1)}")
+            print(f"Port scan targets detected: {match.group(1)}")
             result = match.group(1)
         else:
             print(f"[ERROR] No valid content found in result for host {host_name}: {result}")
             return []
+        
 
         print(result)
 

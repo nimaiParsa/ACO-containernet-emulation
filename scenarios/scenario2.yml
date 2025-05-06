@@ -40,7 +40,8 @@ s1:
 
 s2:
   type: Switch
-  cmds: []
+  cmds:
+    - ovs-vsctl -- --id=@p get Port s2-eth5 -- --id=@m create Mirror name=blueMirror select-all=true output-port=@p -- set Bridge s2 mirrors=@m 
   neighbors: [r2, user3, user4, blue1]
 
 s3:

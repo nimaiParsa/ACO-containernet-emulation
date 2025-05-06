@@ -22,7 +22,7 @@ class BlueObservationManager:
         ip_addresses: str or list of str
         """
         if isinstance(ip_addresses, str):
-            ip_addresses = [ip_addresses]  # Make it a list
+            ip_addresses = [ip_addresses]  
 
         if host_name not in self.observations["hosts"]:
             self.observations["hosts"][host_name] = {
@@ -34,7 +34,7 @@ class BlueObservationManager:
                 "port_scan_detected": [],
                 "recent_login_failures": 0,
                 "isolated": False,
-                "compromised": False  # Optional ground-truth
+                "compromised": False  
             }
 
     def update_host_service(self, host_name, port):

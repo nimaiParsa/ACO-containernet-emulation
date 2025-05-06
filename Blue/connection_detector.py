@@ -13,9 +13,10 @@ class ConnectionDetector(Detector):
         Return a list of IPs that the given host has active connections with.
         """
         connected_hosts = set()
-
+        print(f"[INFO] Detecting connections for host {host.name} with IP {host.IP()}")
         # Step 1: Fetch network connections
         netstat_output = host.cmd('netstat -ant')
+        print(netstat_output)
 
         host_ips = host.IP()
         if isinstance(host_ips, str):

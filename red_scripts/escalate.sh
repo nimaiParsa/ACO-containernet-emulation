@@ -34,4 +34,4 @@ chmod +x drop.sh
 RAND_FILE="drop_$(date +%s)_$RANDOM.bin"
 
 
-./drop.sh "0.8" "RAND_FILE="drop_$(date +%s)_$RANDOM.bin $1" 
+# ./drop.sh "0.8" "RAND_FILE="drop_$(date +%s)_$RANDOM.bin $1" 
