@@ -39,6 +39,9 @@ RUN mkdir /var/run/sshd && \
     sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
     echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
 
+RUN mkdir /home/tmp
+RUN mkdir /home/tmp/drops
+
 COPY red_scripts /home/hacker/red_scripts
 COPY blue_scripts /home/hacker/blue_scripts
 RUN chown -R hacker:hacker /home/hacker/red_scripts && chmod +x /home/hacker/red_scripts/*.sh

