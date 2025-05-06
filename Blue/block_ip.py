@@ -15,6 +15,7 @@ class BlockIPAction(Action):
         print(f"[+] Blocking traffic from IP: {block_ip}")
 
         for host in self.blue_mgr.get_observations()["hosts"]:
+            print("hello")
             host_node = self.topo.net.get(host)
             if host.startswith('r'):
                 router = self.topo.net.get(host)

