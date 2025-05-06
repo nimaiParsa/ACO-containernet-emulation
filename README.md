@@ -37,6 +37,7 @@ Setup containernet from their official [GitHub repository](https://github.com/co
 cd containernet
 git clone <this-repo-url> aco-simulator
 cd aco-simulator
+pip install -r requirements.txt
 ```
 
 ---
@@ -45,8 +46,8 @@ cd aco-simulator
 
 ```plaintext
 aco-simulator/
-├── aco_emulator_test.py   # Containernet topology setup (hardcoded)
-├── aco_emulator.py        # Containernet topology setup (Input from a .yaml file)
+├── aco_emulator.py        # Containernet topology setup (hardcoded)
+├── aco.py                 # Containernet topology setup (Input from a .yaml file)
 ├── red_run_env.py         # Code to simulate red actions
 ├── blue_run_env.py        # Code to simulate blue actions
 ├── makefile               # Build/run automation

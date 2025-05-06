@@ -1,6 +1,5 @@
 import base64
 import ipaddress
-import pyshark
 import os
 import time
 from Blue.detector import Detector
