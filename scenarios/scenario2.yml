@@ -72,6 +72,7 @@ user2:
     - mkdir -p /home/hacker
     - service ssh start
     - echo "user3=${user3}" > /home/hacker/secret.txt
+    - echo "user4=${user4}" >> /home/hacker/secret.txt
   neighbors: [s1]
 
 user3:

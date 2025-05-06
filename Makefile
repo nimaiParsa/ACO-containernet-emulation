@@ -1,6 +1,8 @@
 # Variables
 PYTHON = python3
 MAIN = main.py
+RED_FILE = run_red_env.py
+BLUE_FILE = run_blue_env.py
 
 # Docker image tags
 RED_IMAGE = red_node
@@ -8,9 +10,9 @@ BLUE_IMAGE = blue_node
 OP_IMAGE = op_node
 
 # Dockerfiles
-RED_DOCKERFILE = Dockerfile.red
-BLUE_DOCKERFILE = Dockerfile.blue
-OP_DOCKERFILE = Dockerfile.op
+RED_DOCKERFILE = docker_setup/Dockerfile.red
+BLUE_DOCKERFILE = docker_setup/Dockerfile.blue
+OP_DOCKERFILE = docker_setup/Dockerfile.op
 
 # Default target
 .PHONY: all
@@ -29,6 +31,18 @@ build:
 run:
 	@echo "[+] Running Containernet network..."
 	sudo -E env PATH=$$PATH $(PYTHON) $(MAIN)
+
+# Run the red_env file
+.PHONY: red
+red:
+	@echo "[+] Running Red Actions..."
+	sudo -E env PATH=$$PATH $(PYTHON) $(RED_FILE)
+
+# Run the blue_env file
+.PHONY: blue
+blue:
+	@echo "[+] Running Red Actions..."
+	sudo -E env PATH=$$PATH $(PYTHON) $(BLUE_FILE)
 
 # Clean up Docker containers and Mininet state
 .PHONY: clean

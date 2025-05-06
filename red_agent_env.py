@@ -69,6 +69,8 @@ class RedTeamEnv:
                     node_colors.append('orange')
                 elif attr.get('access') == 'user':
                     node_colors.append('yellow')
+                elif attr.get('access') == 'blocked':
+                    node_colors.append('blue')
                 else:
                     node_colors.append('lightgray')
 
@@ -117,7 +119,13 @@ class RedTeamEnv:
         """Return a dict with current view of reachable nodes."""
         return self.observations
 
-    def discover_remote_systems(self, subnet: str):
+    def make_host_unreachable(self, host_name):
+        self.observations[host_name]['Access'] = 'blocked'
+        self.graph.nodes[host_name]['access'] = 'blocked'
+        # remove host from root_access nodes
+        self.root_access_nodes.remove(host_name)
+
+    def discover_remote_systems(self, subnet: str, method: str=None):
         """Run discover_remote.sh from a node in the given subnet with root access."""
         script_path = "/home/hacker/red_scripts/discover_remote.sh"
         try:
@@ -145,6 +153,10 @@ class RedTeamEnv:
 
         subnet_prefix = str(subnet.network_address).rsplit('.', 1)[0]
         output = self.execute_command_on(selected_node, f"bash {script_path} {subnet_prefix}").strip()
+
+        if "Scanning completed" not in output or method=="ping":
+            self.make_host_unreachable(selected_node)
+            return False
 
         for line in output.splitlines():
             if "Host up:" in line:
@@ -176,6 +188,8 @@ class RedTeamEnv:
                     if selected_node != target_host and not self.graph.has_edge(selected_node, target_host):
                         self.graph.add_edge(selected_node, target_host, type='discovery')
     
+        return True
+        
     def discover_network(self, target_ip: str):
         """Run service discovery (Nmap) on the target IP from a reachable root-access node."""
         script_path = "/home/hacker/red_scripts/discover_network.sh"
@@ -600,11 +614,8 @@ class RedTeamEnv:
         result = self.execute_command_on(target, discover_cmd).strip()  
         
         for line in result.splitlines():
-            match = re.match(r'^\s*([^=\s]+)\s*=\s*([^=\s]+)\s*$', line)
-            if match:
-                key = match.group(1)
-                value = match.group(2)
-                
+            matches = re.findall(r'([^=\s]+)\s*=\s*([^=\s]+)', line)
+            for key, value in matches:
                 # Update the graph with the new host
                 if key not in self.graph.nodes:
                     self.graph.add_node(key, ip=[ipaddress.IPv4Address(value)], access='unknown')
@@ -618,6 +629,7 @@ class RedTeamEnv:
                     }
                     
                     print(f"[+] Discovered: {key} ({value})")
+
 
     def impact(self, target: str):
         """Run impact.sh from a node in the given subnet with root access."""
