@@ -10,13 +10,13 @@ class ConnectionDetector(Detector):
 
     def detect(self, host):
         """
-        Return a list of IPs that the given host has active connections with.
+        Returns a list of IPs that the given host has active connections with.
         """
         connected_hosts = set()
         print(f"[INFO] Detecting connections for host {host.name} with IP {host.IP()}")
         # Step 1: Fetch network connections
         netstat_output = host.cmd('netstat -ant')
-        print(netstat_output)
+        # print(netstat_output)
 
         host_ips = host.IP()
         if isinstance(host_ips, str):
@@ -63,4 +63,3 @@ class ConnectionDetector(Detector):
         print(f"[INFO] Recording connection from {host_name} to {host}")
         self.blue_mgr.get_observations()["hosts"][self._ip_to_host(host_name)]["connection"].append(host)
         self.blue_mgr.get_observations()["hosts"][self._ip_to_host(host)]["connection"].append(host_name)
-        print(f"[INFO] Recorded connection from {host_name} to {host}")

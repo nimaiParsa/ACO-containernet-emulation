@@ -34,7 +34,7 @@ class PortScanDetector(Detector):
         host_ip = host.IP()
         # print(f"[INFO] Detecting port scan for host {host_name} with IP {host_ip}")
         print(blue_host.cmd(f"ls -lh /home/hacker/blue_scripts/"))
-        # result = blue_host.cmd(f"python3 /home/hacker/blue_scripts/pcap_processor.py {host_ip}")
+        result = blue_host.cmd(f"python3 /home/hacker/blue_scripts/pcap_processor.py {host_ip}")
         print(f"[INFO] Result from pcap_processor.py: {result}")
         match = re.search(r'\[(.*?)\]', result)
         if match:
@@ -44,9 +44,6 @@ class PortScanDetector(Detector):
             print(f"[ERROR] No valid content found in result for host {host_name}: {result}")
             return []
         
-
-        print(result)
-
         suspected_targets = result.split(',')
         suspected_targets = [target.strip("'\"") for target in suspected_targets]
 

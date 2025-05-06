@@ -47,17 +47,11 @@ def main():
         pprint(blue_mgr.get_observations())
         print("---------------------------------------------------------")
 
-        user1.cmd("nc 10.0.0.2 4444 &")
-        user0.cmd("nc -lvnp 4444 &")
+        user1.cmd("nc -lvnp 4444 &")
+        sleep(2)
+        user0.cmd("nc 10.0.0.2 4444 &")
         print("------------------------------------------------------------")
         connection_detector.detect(env.net.get('user0'))
-        # print("Updated Blue Observatio
-        # env.exploit('user1')
-        # print("Updated Observation:")
-        # pprint(env.get_observation())
-        # print("\n\n")
-        
-        # env.update_graph("Performed Exploit on user1")n:")
         pprint(blue_mgr.get_observations())
         print("------------------------------------------------------------")
 

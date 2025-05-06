@@ -6,8 +6,6 @@ import sys
 
 def detect_port_scan(pcap_file, host_ip, port_threshold=10, interval=5, iterations=2):
     """
-    Real-time port scan detection from a continuously updated pcap file.
-
     :param pcap_file: Path to the continuously updated pcap file.
     :param host_ip: Source IP to monitor for port scanning activity.
     :param port_threshold: Minimum unique destination ports to flag a scan.
@@ -42,7 +40,7 @@ def detect_port_scan(pcap_file, host_ip, port_threshold=10, interval=5, iteratio
             time.sleep(interval)
 
         except KeyboardInterrupt:
-            print("Stopping real-time monitoring.")
+            print("Stopping monitoring.")
             break
         except Exception as e:
             print(f"Error occurred: {e}")
